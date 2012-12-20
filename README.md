@@ -1,6 +1,5 @@
 transmartAppInstaller meant for  tranSMART - translational medicine data mart
-Author : pieter lukasse (pieter@thehyve.nl)
-=====================
+Author : pieter lukasse
 
 About transmartAppInstaller
 
