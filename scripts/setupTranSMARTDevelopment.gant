@@ -1,0 +1,390 @@
+import org.apache.tools.ant.taskdefs.Ant
+
+/*************************************************************************
+ * transmartAppInstaller meant for  tranSMART - translational medicine data mart
+ *
+ * Copyright 2012 The Hyve B.V.
+ *
+ * Author : pieter lukasse (pieter@thehyve.nl)
+ *
+ ******************************************************************/
+
+
+
+/**
+ * This script automates the steps needed to setup:
+ *
+ * the tranSMART DB
+ * the i2b2 DB
+ * demo data
+ *
+ * It does this in a Postgres DB. This setup is well suited for a development environment.
+ *
+ * Pre-requisites (available from command line - or configured in setupTranSMARTDevelopment.properties):
+ *
+ *  - git
+ *  - psql (postgres sql )
+ *  - pre-configured jboss ( JBoss 4.2.2.GA see http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000)
+ *  - a properly configured setupTranSMARTDevelopment.properties
+ *
+ * NB: for running in IntelliJ/Grails: make sure you do NOT have ant jar files in the /lib folder...these will conflict with Grails .jars
+ *
+ * @author : pieter lukasse (pieter@thehyve.nl)
+ */
+
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//note: make sure your GRAILS is 2.0.4 or higher...
+//tested with version 2.0.4
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+def ant = new AntBuilder();
+
+properties = readProperties()
+
+
+tools_git_cmd=properties.getProperty("tools.git.cmd")
+tools_psql_cmd=properties.getProperty("tools.psql.cmd")
+locations_jboss=properties.getProperty("locations.jboss")
+build_dir=properties.getProperty("locations.build.out")
+postgres_user="postgres"
+transmart_db_name="transmart"  //better keep it with this value for now...script does not deal with other names for now  (e.g. still a problem in - a. Create the transmart database (can use script transmart-db.sql))
+transmart_db_tablespace_location=properties.getProperty("locations.db.tablespaces")
+
+//some handy derived globals:
+ant_last_step_output=build_dir + "/ant_last_step_out.txt"
+psql_location = new File(tools_psql_cmd).getParent()
+
+
+
+target('default': "cleanup and setup") {
+    depends(setup)
+    clean()
+    install()
+    //verifyDEAPPdata()
+}
+
+target(setup: "any initializations") {
+
+}
+
+target(clean: "clean-up to run again...do we want this now?") {
+
+}
+
+target(install: "The installation script") {
+
+//    Build tranSMART demo-data Tables
+//
+//    github - clone script repository
+//    create/find and cd to your github directory
+//    git clone https://github.com/transmart/transmartApp-DB
+//    change to branch: create a “tracking branch” for postgresMigrate
+//    cd transmartApp-DB
+//    git checkout -b postgresMigrate origin/postgresMigrate
+//    Build initiial PostgreSQL databases (for both transMart and i2b2)
+//    cd postgresql , then instructions in readme
+    gitStep("https://github.com/transmart/transmartApp-DB", "${build_dir}/transmartApp-DB", "postgresMigrate", true)
+
+//    There are 3 main steps to creating the transmart database:
+//    1.  Create the transmart schemas (and all objects not part of i2b2 or ETL)
+//    2.  Execute the i2b2 postgresql database import scripts to
+//    create the transmart-specific i2b2 objects, linkages, and data
+//    3.  Create the ETL schema objects
+
+//    Prior to executing the script:
+//    a. Create the transmart database (can use script transmart-db.sql)
+    createTransmartDB()
+//    b. In tablespaces.sql, update the directory locations of the tablespaces to be created.
+    updateTablespaces()
+
+//    Execute the create-main script
+//    psql  create-main.sql
+    dbScriptStep("${build_dir}/transmartApp-DB/postgresql/create-main.sql", postgres_user, transmart_db_name, true, true, "${build_dir}/transmartApp-DB/postgresql")
+
+//    Verification:
+//    1. Verify SEARCHAPP table row counts using searchapp/data/check_counts.sql.
+    verifySEARCHAPPdata()
+
+//    2. Verify DEAPP table row counts using deapp/data/check_counts.sql.
+    verifyDEAPPdata()
+
+//  3. Verify BIOMART table row counts using biomart/data/check_counts.sql.
+    verifyBIOMARTdata()
+}
+
+target(createTransmartDB: "createTransmartDB")
+{
+
+    def command =  ["${psql_location}/dropdb.exe", "-U", postgres_user, transmart_db_name]
+    commandStep(command, false)
+    removeFromScript("${build_dir}/transmartApp-DB/postgresql/transmart-db.sql", "DROP DATABASE transmart;")
+    dbScriptStep("${build_dir}/transmartApp-DB/postgresql/transmart-db.sql", postgres_user, null, false)      //TODO how to send handlers as parameter
+
+    println("Executing alternative transmart-db.sql script to ensure creation regardless or collation problems")
+    //small workaround
+    def newTempScript = fixScriptCollation("${build_dir}/transmartApp-DB/postgresql/transmart-db.sql")
+    dbScriptStep(newTempScript, postgres_user, null, false)
+
+}
+
+target(updateTablespaces: "createTablespaces")
+{
+    fixTablespaceLocation("${build_dir}/transmartApp-DB/postgresql/tablespaces.sql")
+    //nb: no need to execute script here...this is a prep for  create-main.sql
+}
+
+target(verifySEARCHAPPdata: "verify SEARCHAPP data")
+{
+    dbScriptStep("${build_dir}/transmartApp-DB/postgresql/searchapp/data/check_counts.sql", postgres_user, transmart_db_name, true, false, ".")
+    //TODO - below should work but is hanging as ant.exec does not seem to be passing the given inputstring to the stdin...so process is hanging waiting for biomart_user's password.
+    //TODO (CONT) -       So find out why ant is failing here and how to fix it...looked at various sites but could not find an answer or similar case...
+    //dbScriptStep("${build_dir}/transmartApp-DB/postgresql/searchapp/data/check_counts.sql", "biomart_user", transmart_db_name, true, false, ".", "biomart_user")
+
+    FileReader reader = new FileReader(ant_last_step_output)
+    def lines = reader.readLines()
+
+    //verify some of the counts:
+    assertEquals(lines.get(2),"SEARCH_KEYWORD_TERM           | 105844")
+    assertEquals(lines.get(3),"SEARCH_KEYWORD                |  42114")
+    assertEquals(lines.get(4),"SEARCH_REQUEST_MAP            |     17")
+    assertEquals(lines.get(5),"PLUGIN_MODULE                 |     11")
+}
+
+
+target(verifyDEAPPdata: "verify DEAPP data")
+{
+    dbScriptStep("${build_dir}/transmartApp-DB/postgresql/deapp/data/check_counts.sql", postgres_user, transmart_db_name, true, false, ".")
+
+    FileReader reader = new FileReader(ant_last_step_output)
+    def lines = reader.readLines()
+
+    //verify some of the counts:
+    assertEquals(lines.get(2),"DE_SUBJECT_MICROARRAY_DATA | 54400")
+    assertEquals(lines.get(3),"DE_MRNA_ANNOTATION         |  5440")
+    assertEquals(lines.get(4),"DE_SUBJECT_SAMPLE_MAPPING  |    10")
+    assertEquals(lines.get(5),"DE_SAVED_COMPARISON        |     5")
+}
+
+target(verifyBIOMARTdata: "verify DEAPP data")
+{
+    dbScriptStep("${build_dir}/transmartApp-DB/postgresql/biomart/data/check_counts.sql", postgres_user, transmart_db_name, true, false, ".")
+
+    FileReader reader = new FileReader(ant_last_step_output)
+    def lines = reader.readLines()
+
+    //verify some of the counts:
+    assertEquals(lines.get(2),"BIO_ASSAY_FEATURE_GROUP     | 237002")
+    assertEquals(lines.get(3),"BIO_ASSAY_ANALYSIS_DATA     | 184538")
+    assertEquals(lines.get(4),"BIO_DATA_EXT_CODE           | 134965")
+    assertEquals(lines.get(5),"BIO_DATA_UID                | 126764")
+}
+
+
+//======================= UTILITY METHODS ==============================================================
+
+def assertEquals(value, reference)
+{
+    print("checking: " + value + " = " + reference + "...")
+    assert value.trim().equals(reference)
+    println("\t OK!")
+}
+
+
+def commandStep(command, failOnError, dir=".", inputString=null)
+{
+    /*println("Executing " + command.toString() + "...")
+    def proc = command.execute()
+    proc.waitFor()
+    def error = new String(proc.getErrorStream().bytes)
+    if (error.length() > 0)
+    {
+        if (failOnError)
+            throw new Exception(error)
+        else
+            error.println("WARNING: " + error)
+    } */
+
+
+    def executable = command.get(0)
+    //remove executable from list:
+    command.remove(0)
+    def arguments = listToString(command)//.toString().replaceAll(",", " ")
+
+    println("Executing " + executable + " " +arguments.toString() )
+    println("Failonerror= " + failOnError)
+
+    def ant = new AntBuilder()   // create an antbuilder
+    if (inputString == null)
+    {
+        def result = ant.exec(dir: dir,
+                failonerror: failOnError,
+                output: ant_last_step_output,
+                executable: executable)
+                {
+                    arg(line: arguments)
+                }
+    }
+    else
+    {
+        def result = ant.exec(dir: dir,
+                failonerror: failOnError,
+                inputstring: inputString,
+                output: ant_last_step_output,
+                executable: executable)
+                {
+                    arg(line: arguments)
+                }
+    }
+    println "return code:  ${ant.project.properties.cmdExit}"
+
+}
+
+private void gitStep(repositoryUrl, destDir)
+{
+    gitStep(repositoryUrl, destDir, null)
+}
+
+def gitStep(repositoryUrl, destDir, branch, failOnError)
+{
+    // Ant.exec could also be an option...but is not really simpler than below...
+
+    def command =  [tools_git_cmd, "clone", repositoryUrl, destDir]
+    //checkout specified branch :
+    if (branch)
+    {
+        command = [tools_git_cmd, "clone", repositoryUrl, destDir, "-b", branch]
+    }
+    commandStep(command, failOnError)
+}
+
+
+//TODO : we can also add a parameter "host" and use -h host to execute the scripts on a remote DB...
+def dbScriptStep(scriptFileName, user, databaseName, failOnError, quiet=true, dir=".", password=null)
+{
+    //e.g. D:\installations\PostgreSQL\9.2\bin\psql.exe -U postgres -d transmart -f create-main.sql --quiet
+
+    def command =  [tools_psql_cmd, "-U", user, "-f", scriptFileName]
+    //checkout specified branch :
+    if (databaseName)
+    {
+        command.add("-d")
+        command.add(databaseName)
+    }
+    if (quiet)
+    {
+        command.add("--quiet")
+    }
+    commandStep(command, failOnError, dir, password)
+}
+
+
+
+def fixScriptCollation(String scriptFileName)
+{
+    //read script file and replace
+    //CREATE DATABASE transmart_db_name
+    //with
+    //CREATE DATABASE transmart_db_name TEMPLATE template0;
+    def scriptTemp = file2String(scriptFileName)
+    scriptTemp = scriptTemp.replace("WITH OWNER = postgres", "WITH OWNER = postgres \n TEMPLATE template0")
+    string2File(scriptTemp, scriptFileName + ".tmp")
+    return scriptFileName + ".tmp";
+}
+
+
+
+
+def fixTablespaceLocation(String scriptFileName)
+{
+    //read script file and replace
+    // /opt/PostgreSQL/9.1/data/tablespaces/
+    //with
+    // transmart_db_tablespace_location
+    def scriptTemp = file2String(scriptFileName)
+    scriptTemp = scriptTemp.replaceAll("/opt/PostgreSQL/9.1/data/tablespaces", transmart_db_tablespace_location)
+    string2File(scriptTemp, scriptFileName)
+    return scriptFileName;
+}
+
+/**
+ * quick method, handy for SMALL files
+ *
+ * @return
+ * @throws java.io.IOException
+ */
+public static String file2String(String fileName) throws IOException
+{
+    InputStream fileInputStream = new FileInputStream(new File(fileName))
+    String result = "";
+    try
+    {
+        byte[] buf = new byte[2048];
+        int i = 0;
+        while((i=fileInputStream.read(buf))!=-1)
+        {
+            result += new String(buf, 0, i);
+        }
+    }
+    finally
+    {
+        fileInputStream.close();
+    }
+    return result;
+}
+
+private static String string2File(String value, String fileName) throws IOException
+{
+    FileWriter outFile = new FileWriter(fileName);
+
+    try
+    {
+        outFile.write(value)
+    }
+    finally
+    {
+        outFile.close();
+    }
+
+}
+
+/**
+ * comments out given part
+ *
+ * @param scriptFileName
+ * @param whatToRemove
+ * @return
+ */
+def removeFromScript(String scriptFileName, String whatToRemove)
+{
+    def scriptTemp = file2String(scriptFileName)
+    scriptTemp = scriptTemp.replace(whatToRemove, "--" +whatToRemove)      //PA - find how to comment a line out...
+    string2File(scriptTemp, scriptFileName)
+}
+
+
+/**
+ * This method will translate the given list to a \n separated string
+ *
+ * @param valuesList
+ * @return
+ */
+def listToString(valuesList)
+{
+    String result = "";
+    for (String value : valuesList)
+    {
+        result += value + " ";
+    }
+    return result;
+}
+
+//Alternative for ant.property method which does not seem to work...
+//ant.property( file : 'D:\\development\\transmartAppInstaller\\scripts\\setupTranSMARTDevelopment.properties' )  //TODO : find out how to read out these properties. Then we could set properties below in the .properties file and read it out from there
+//def properties = ant.getProperties();
+def readProperties()
+{
+    def propertiesFile = new FileReader("setupTranSMARTDevelopment.properties");
+    def properties = new Properties();
+    properties.load(propertiesFile);
+    return properties
+}
