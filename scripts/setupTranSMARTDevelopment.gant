@@ -44,6 +44,7 @@ properties = readProperties()
 
 tools_git_cmd=properties.getProperty("tools.git.cmd")
 tools_psql_cmd=properties.getProperty("tools.psql.cmd")
+tools_ant_cmd=properties.getProperty("tools.ant.cmd")
 locations_jboss=properties.getProperty("locations.jboss")
 build_dir=properties.getProperty("locations.build.out")
 postgres_user="postgres"
@@ -59,8 +60,9 @@ psql_location = new File(tools_psql_cmd).getParent()
 target('default': "cleanup and setup") {
     depends(setup)
     clean()
-    install()
-    //verifyDEAPPdata()
+   // install()
+    //testing:
+    executeI2b2ImportScripts()
 }
 
 target(setup: "any initializations") {
@@ -97,19 +99,122 @@ target(install: "The installation script") {
 //    b. In tablespaces.sql, update the directory locations of the tablespaces to be created.
     updateTablespaces()
 
-//    Execute the create-main script
-//    psql  create-main.sql
+//   Step 1:
+//    The create-main.sql script will drop and then create schemas, objects,
+//    and seed data in the transmart database.
     dbScriptStep("${build_dir}/transmartApp-DB/postgresql/create-main.sql", postgres_user, transmart_db_name, true, true, "${build_dir}/transmartApp-DB/postgresql")
-
-//    Verification:
-//    1. Verify SEARCHAPP table row counts using searchapp/data/check_counts.sql.
+//  Verification:
+//  Verify SEARCHAPP table row counts using searchapp/data/check_counts.sql.
     verifySEARCHAPPdata()
-
-//    2. Verify DEAPP table row counts using deapp/data/check_counts.sql.
+//  Verify DEAPP table row counts using deapp/data/check_counts.sql.
     verifyDEAPPdata()
-
-//  3. Verify BIOMART table row counts using biomart/data/check_counts.sql.
+//  Verify BIOMART table row counts using biomart/data/check_counts.sql.
     verifyBIOMARTdata()
+
+//    Step 2: Execute the i2b2 postgresql import scripts
+    executeI2b2ImportScripts()
+
+}
+
+
+target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
+{
+    //    a. Execute the i2b2_prerequisites.sql script
+    dbScriptStep("${build_dir}/transmartApp-DB/postgresql/i2b2_prerequisites.sql", postgres_user, transmart_db_name, true, false)
+
+//    Download i2b2 upgrades and data loading for PostgreSQL upgrade - github/transmart/i2b2_1.6_postgres
+//    Use master branch
+    def i2b2Dir = "${build_dir}/i2b2_1.6_postgres"
+    gitStep("https://github.com/transmart/i2b2_1.6_Postgres.git", i2b2Dir)
+    //same as git@github.com:transmart/i2b2_1.6_Postgres.git? TODO: check
+
+//    a2.  Execute the i2b2 postgresql import scripts
+// From i2b2Dir/readme :
+//    see demodata/src/src/edu.harvard.i2b2.data/Release_1-6/NewInstall/Data load instructions.docx
+//    and coreserver/src/README.txt
+
+//    demodata - scrips for building the postgres version of the demo data
+
+    def demodataDir = i2b2Dir + "/demodata/src/src/edu.harvard.i2b2.data/Release_1-6/NewInstall/"
+    //    1. Set appropriate values for properties mentioned in db.properties file    //TODO - db.properties are not yet updated here
+    def command =  ["${tools_ant_cmd}", "setup_db_properties"]
+    commandStep(command, true, demodataDir)
+    command =  ["${tools_ant_cmd}", "load_pmdata"]
+    commandStep(command, true, demodataDir)
+    command =  ["${tools_ant_cmd}", "load_hivedata"]
+    commandStep(command, true, demodataDir)
+    command =  ["${tools_ant_cmd}", "load_demodata"]
+    commandStep(command, true, demodataDir)
+    command =  ["${tools_ant_cmd}", "load_metadata"]
+    commandStep(command, true, demodataDir)
+    command =  ["${tools_ant_cmd}", "load_workdata"]
+    commandStep(command, true, demodataDir)
+
+//PA - stopped here 21-12-2012:   TODO check if steps below are still according to the last version (do a diff on the readme file)
+
+//    coreserver - source files for building the core i2b2 modules used by tranSMART
+//
+//    SUMMARY of all the files that need modification
+//    (relative to BASE_DIR)
+//    ./edu.harvard.i2b2.common/build.properties
+//    jboss.home=YOUR_JBOSS_HOME_DIR
+//    ant clean dist deploy jboss_pre_deployment_setup
+//
+//    ./edu.harvard.i2b2.pm/build.properties
+//    jboss.home=YOUR_JBOSS_HOME_DIR
+//            ./edu.harvard.i2b2.pm/etc/jboss/pm-ds.xml
+//    you may have to modify: connection-url, user-name, and password
+//    ant -f master_build.xml clean build-all deploy
+//
+//    ./edu.harvard.i2b2.ontology/build.properties
+//    jboss.home=YOUR_JBOSS_HOME_DIR
+//            ./edu.harvard.i2b2.ontology/etc/jboss/ont-ds.xml
+//    you may have to modify: connection-url, user-name, and password
+//    changes may be necessary for: i2b2hive, i2b2metadata, and i2b2metadata2
+//        ./edu.harvard.i2b2.ontology/etc/spring/ontology_application_directory.properties
+//    set edu.harvard.i2b2.ontology.applicationdir
+//    to YOUR_JBOSS_HOME_DIR/server/default/conf/ontologyapp
+//    ant -f master_build.xml clean build-all deploy
+//
+//    ./edu.harvard.i2b2.crc.loader/build.properties
+//    jboss.home=YOUR_JBOSS_HOME_DIR
+//            ./edu.harvard.i2b2.crc.loader/etc/spring/crc_loader_application_directory.properties
+//    set edu.harvard.i2b2.crc.loader.applicationdir to be
+//    YOUR_JBOSS_HOME_DIR/server/default/conf/crcapp
+//    ant -f build.xml clean dist
+//
+//
+//    ./edu.harvard.i2b2.crcplugin.patientcount/build.properties
+//    crcplugin.home=YOUR_JBOSS_HOME_DIR/server/default
+//    jboss.home=YOUR_JBOSS_HOME_DIR
+//            ./edu.harvard.i2b2.crcplugin.patientcount/etc/spring/patientcount_application_directory.properties
+//    set edu.harvard.i2b2.crcplugin.pb.applicationdir
+//    to YOUR_JBOSS_HOME_DIR/server/default/conf/crcapp
+//    no build HERE???
+//
+//    ./edu.harvard.i2b2.crc/build.properties
+//    jboss.home=YOUR_JBOSS_HOME_DIR
+//            ./edu.harvard.i2b2.crc/etc/spring/crc_application_directory.properties
+//    set edu.harvard.i2b2.crc.applicationdir to be
+//    YOUR_JBOSS_HOME_DIR/server/default/conf/crcloaderapp
+//    ant -f master_build.xml clean build-all deploy
+//
+//    ./edu.harvard.i2b2.workplace/build.properties
+//    jboss.home=YOUR_JBOSS_HOME_DIR
+//            ./edu.harvard.i2b2.workplace/etc/spring/workplace_application_directory.properties
+//    set edu.harvard.i2b2.workplace.applicationdir
+//    to YOUR_JBOSS_HOME_DIR/server/default/conf/workplaceapp
+//    ant -f master_build.xml clean build-all deploy
+//
+//
+//    ./edu.harvard.i2b2.fr/build.properties
+//    jboss.home=YOUR_JBOSS_HOME_DIR
+//            ./edu.harvard.i2b2.fr/etc/spring/fr_application_directory.properties
+//    set edu.harvard.i2b2.fr.applicationdir
+//    to YOUR_JBOSS_HOME_DIR/server/default/conf/frapp
+//    ant -f master_build.xml clean build-all deploy
+
+
 }
 
 target(createTransmartDB: "createTransmartDB")
@@ -190,7 +295,7 @@ def assertEquals(value, reference)
 }
 
 
-def commandStep(command, failOnError, dir=".", inputString=null)
+def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, timeout=300000, output=ant_last_step_output)
 {
     /*println("Executing " + command.toString() + "...")
     def proc = command.execute()
@@ -204,47 +309,57 @@ def commandStep(command, failOnError, dir=".", inputString=null)
             error.println("WARNING: " + error)
     } */
 
+    try{
 
-    def executable = command.get(0)
-    //remove executable from list:
-    command.remove(0)
-    def arguments = listToString(command)//.toString().replaceAll(",", " ")
 
-    println("Executing " + executable + " " +arguments.toString() )
-    println("Failonerror= " + failOnError)
+        def executable = command.get(0)
+        //remove executable from list:
+        command.remove(0)
+        def arguments = listToString(command)//.toString().replaceAll(",", " ")
 
-    def ant = new AntBuilder()   // create an antbuilder
-    if (inputString == null)
-    {
-        def result = ant.exec(dir: dir,
-                failonerror: failOnError,
-                output: ant_last_step_output,
-                executable: executable)
-                {
-                    arg(line: arguments)
-                }
+        println("Executing " + executable + " " +arguments.toString() )
+        //println("Failonerror= " + failOnError)
+
+        def ant = new AntBuilder()   // create an antbuilder
+        if (inputString == null)
+        {
+             ant.exec(dir: dir,
+                    failonerror: failOnError,
+                    output: output,
+                    timeout: timeout,
+                    executable: executable)
+                    {
+                        arg(line: arguments)
+                    }
+        }
+        else
+        {
+            ant.exec(dir: dir,
+                    failonerror: failOnError,
+                    inputstring: inputString,
+                    output: output,
+                    timeout: timeout,
+                    executable: executable)
+                    {
+                        arg(line: arguments)
+                    }
+
+        }
     }
-    else
+    finally
     {
-        def result = ant.exec(dir: dir,
-                failonerror: failOnError,
-                inputstring: inputString,
-                output: ant_last_step_output,
-                executable: executable)
-                {
-                    arg(line: arguments)
-                }
+        if (!quiet)
+        {
+            if (output.equals(ant_last_step_output))
+                println("STEP OUTPUT: \n" +file2String(ant_last_step_output))
+        }
     }
-    println "return code:  ${ant.project.properties.cmdExit}"
 
 }
 
-private void gitStep(repositoryUrl, destDir)
-{
-    gitStep(repositoryUrl, destDir, null)
-}
 
-def gitStep(repositoryUrl, destDir, branch, failOnError)
+
+def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 {
     // Ant.exec could also be an option...but is not really simpler than below...
 
@@ -252,14 +367,15 @@ def gitStep(repositoryUrl, destDir, branch, failOnError)
     //checkout specified branch :
     if (branch)
     {
-        command = [tools_git_cmd, "clone", repositoryUrl, destDir, "-b", branch]
+        command.add("-b")
+        command.add(branch)
     }
-    commandStep(command, failOnError)
+    commandStep(command, failOnError, ".", null, false, 600000) //TODO show progress...perhaps by reading output in a separate thread...?
 }
 
 
 //TODO : we can also add a parameter "host" and use -h host to execute the scripts on a remote DB...
-def dbScriptStep(scriptFileName, user, databaseName, failOnError, quiet=true, dir=".", password=null)
+def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=true, dir=".", password=null)
 {
     //e.g. D:\installations\PostgreSQL\9.2\bin\psql.exe -U postgres -d transmart -f create-main.sql --quiet
 
@@ -274,7 +390,7 @@ def dbScriptStep(scriptFileName, user, databaseName, failOnError, quiet=true, di
     {
         command.add("--quiet")
     }
-    commandStep(command, failOnError, dir, password)
+    commandStep(command, failOnError, dir, password, quiet)
 }
 
 
