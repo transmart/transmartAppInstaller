@@ -39,7 +39,7 @@ import org.apache.tools.ant.taskdefs.Ant
 
 def ant = new AntBuilder();
 
-properties = readProperties()
+properties = readProperties("setupTranSMARTDevelopment.properties")
 
 
 tools_git_cmd=properties.getProperty("tools.git.cmd")
@@ -63,7 +63,7 @@ target('default': "cleanup and setup") {
     clean()
    // install()
     //testing:
-    executeI2b2ImportScripts()
+    i2b2Coreserver()
 }
 
 target(setup: "any initializations") {
@@ -135,7 +135,15 @@ target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
 //    and coreserver/src/README.txt
 
 //    demodata - scrips for building the postgres version of the demo data
+    i2b2Demodata()
 
+//    coreserver - source files for building the core i2b2 modules used by tranSMART
+    i2b2Coreserver()
+}
+
+target(i2b2Demodata: "loading i2b2 demo data")
+{
+    def i2b2Dir = "${build_dir}/i2b2_1.6_postgres"  //TODO remove this redundant line of code...
     def demodataDir = i2b2Dir + "/demodata/src/src/edu.harvard.i2b2.data/Release_1-6/NewInstall/"
     //    1. Set appropriate values for properties mentioned in db.properties file    //TODO - db.properties are not yet updated here
     def command =  ["${tools_ant_cmd}", "setup_db_properties"]
@@ -150,72 +158,122 @@ target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
     commandStep(command, true, demodataDir)
     command =  ["${tools_ant_cmd}", "load_workdata"]
     commandStep(command, true, demodataDir)
+}
 
-//PA - stopped here 21-12-2012:   TODO check if steps below are still according to the last version (do a diff on the readme file)
 
+//TODO: check if this target is needed for DEVELOPMENT setup...or is it just prod...? Anyway, it is working.
+target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by tranSMART")
+{
+    def i2b2Dir = "${build_dir}/i2b2_1.6_postgres"  //TODO remove this redundant line of code...
 //    coreserver - source files for building the core i2b2 modules used by tranSMART
+    def coreserver_subdir = i2b2Dir + "/coreserver/src"
 //
 //    SUMMARY of all the files that need modification
 //    (relative to BASE_DIR)
 //    ./edu.harvard.i2b2.common/build.properties
 //    jboss.home=YOUR_JBOSS_HOME_DIR
 //    ant clean dist deploy jboss_pre_deployment_setup
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.common/build.properties",
+                            "jboss.home", locations_jboss)
+    def command =  ["${tools_ant_cmd}", "clean dist deploy jboss_pre_deployment_setup"]
+    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.common")
 //
 //    ./edu.harvard.i2b2.pm/build.properties
 //    jboss.home=YOUR_JBOSS_HOME_DIR
+    //>>>>>> TODO - not done now:
 //            ./edu.harvard.i2b2.pm/etc/jboss/pm-ds.xml
-//    you may have to modify: connection-url, user-name, and password
+//     you may have to modify: connection-url, user-name, and password
+    //<<<<<<<
 //    ant -f master_build.xml clean build-all deploy
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.pm/build.properties",
+            "jboss.home", locations_jboss)
+    command =  ["${tools_ant_cmd}", "-f master_build.xml clean build-all deploy"]
+    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.pm")
 //
 //    ./edu.harvard.i2b2.ontology/build.properties
 //    jboss.home=YOUR_JBOSS_HOME_DIR
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.ontology/build.properties",
+            "jboss.home", locations_jboss)
+    //>>>>>> TODO - not done now:
 //            ./edu.harvard.i2b2.ontology/etc/jboss/ont-ds.xml
 //    you may have to modify: connection-url, user-name, and password
 //    changes may be necessary for: i2b2hive, i2b2metadata, and i2b2metadata2
+    //<<<<<<<
 //        ./edu.harvard.i2b2.ontology/etc/spring/ontology_application_directory.properties
 //    set edu.harvard.i2b2.ontology.applicationdir
 //    to YOUR_JBOSS_HOME_DIR/server/default/conf/ontologyapp
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.ontology/etc/spring/ontology_application_directory.properties",
+            "edu.harvard.i2b2.ontology.applicationdir", locations_jboss + "/server/default/conf/ontologyapp")
 //    ant -f master_build.xml clean build-all deploy
+    command =  ["${tools_ant_cmd}", "-f master_build.xml clean build-all deploy"]
+    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.ontology")
 //
 //    ./edu.harvard.i2b2.crc.loader/build.properties
 //    jboss.home=YOUR_JBOSS_HOME_DIR
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crc.loader/build.properties",
+            "jboss.home", locations_jboss)
 //            ./edu.harvard.i2b2.crc.loader/etc/spring/crc_loader_application_directory.properties
 //    set edu.harvard.i2b2.crc.loader.applicationdir to be
 //    YOUR_JBOSS_HOME_DIR/server/default/conf/crcapp
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crc.loader/etc/spring/crc_loader_application_directory.properties",
+            "edu.harvard.i2b2.crc.loader.applicationdir", locations_jboss + "/server/default/conf/crcapp")
 //    ant -f build.xml clean dist
-//
+    command =  ["${tools_ant_cmd}", "-f build.xml clean dist"]
+    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.crc.loader")
 //
 //    ./edu.harvard.i2b2.crcplugin.patientcount/build.properties
 //    crcplugin.home=YOUR_JBOSS_HOME_DIR/server/default
 //    jboss.home=YOUR_JBOSS_HOME_DIR
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crcplugin.patientcount/build.properties",
+            "crcplugin.home", locations_jboss + "/server/default")
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crcplugin.patientcount/build.properties",
+            "jboss.home", locations_jboss)
 //            ./edu.harvard.i2b2.crcplugin.patientcount/etc/spring/patientcount_application_directory.properties
 //    set edu.harvard.i2b2.crcplugin.pb.applicationdir
 //    to YOUR_JBOSS_HOME_DIR/server/default/conf/crcapp
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crcplugin.patientcount/etc/spring/patientcount_application_directory.properties",
+            "edu.harvard.i2b2.crcplugin.pb.applicationdir", locations_jboss + "/server/default/conf/crcapp")
 //    no build HERE???
 //
 //    ./edu.harvard.i2b2.crc/build.properties
 //    jboss.home=YOUR_JBOSS_HOME_DIR
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crc/build.properties",
+            "jboss.home", locations_jboss)
 //            ./edu.harvard.i2b2.crc/etc/spring/crc_application_directory.properties
 //    set edu.harvard.i2b2.crc.applicationdir to be
 //    YOUR_JBOSS_HOME_DIR/server/default/conf/crcloaderapp
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crc/etc/spring/crc_application_directory.properties",
+            "edu.harvard.i2b2.crc.applicationdir", locations_jboss + "/server/default/conf/crcloaderapp")
 //    ant -f master_build.xml clean build-all deploy
+    command =  ["${tools_ant_cmd}", "-f master_build.xml clean build-all deploy"]
+    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.crc")
 //
 //    ./edu.harvard.i2b2.workplace/build.properties
 //    jboss.home=YOUR_JBOSS_HOME_DIR
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.workplace/build.properties",
+            "jboss.home", locations_jboss)
 //            ./edu.harvard.i2b2.workplace/etc/spring/workplace_application_directory.properties
 //    set edu.harvard.i2b2.workplace.applicationdir
 //    to YOUR_JBOSS_HOME_DIR/server/default/conf/workplaceapp
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.workplace/etc/spring/workplace_application_directory.properties",
+            "edu.harvard.i2b2.workplace.applicationdir", locations_jboss + "/server/default/conf/workplaceapp")
 //    ant -f master_build.xml clean build-all deploy
+    command =  ["${tools_ant_cmd}", "-f master_build.xml clean build-all deploy"]
+    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.workplace")
 //
 //
 //    ./edu.harvard.i2b2.fr/build.properties
 //    jboss.home=YOUR_JBOSS_HOME_DIR
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.fr/build.properties",
+            "jboss.home", locations_jboss)
 //            ./edu.harvard.i2b2.fr/etc/spring/fr_application_directory.properties
 //    set edu.harvard.i2b2.fr.applicationdir
 //    to YOUR_JBOSS_HOME_DIR/server/default/conf/frapp
+    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.fr/etc/spring/fr_application_directory.properties",
+            "edu.harvard.i2b2.fr.applicationdir", locations_jboss + "/server/default/conf/frapp")
 //    ant -f master_build.xml clean build-all deploy
-
-
+    command =  ["${tools_ant_cmd}", "-f master_build.xml clean build-all deploy"]
+    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.fr")
 }
 
 target(createTransmartDB: "createTransmartDB")
@@ -296,7 +354,7 @@ def assertEquals(value, reference)
 }
 
 
-def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, timeout=300000, output=ant_last_step_output)
+def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, timeout=300000, output=ant_last_step_output)
 {
     /*println("Executing " + command.toString() + "...")
     def proc = command.execute()
@@ -498,10 +556,26 @@ def listToString(valuesList)
 //Alternative for ant.property method which does not seem to work...
 //ant.property( file : 'D:\\development\\transmartAppInstaller\\scripts\\setupTranSMARTDevelopment.properties' )  //TODO : find out how to read out these properties. Then we could set properties below in the .properties file and read it out from there
 //def properties = ant.getProperties();
-def readProperties()
+def readProperties(propertiesFileName)
 {
-    def propertiesFile = new FileReader("setupTranSMARTDevelopment.properties");
+    def propertiesFile = new FileReader(propertiesFileName);
     def properties = new Properties();
     properties.load(propertiesFile);
     return properties
+}
+/**
+ * This method will replace the value of the given property with the given value in the
+ * property file.
+ *
+ * @param propertiesFileName : .property file to change
+ * @param propertyName       : the property to change (e.g. "jboss.home" )
+ * @param newPropertyValue   : the new value for this property
+ */
+def replacePropertyInFile(String propertiesFileName, String propertyName, String newPropertyValue)
+{
+    def properties = readProperties(propertiesFileName)
+    properties.setProperty(propertyName, newPropertyValue)
+    def output = new FileOutputStream(propertiesFileName)
+    properties.store(output, "# nb: " + propertyName + " changed by transmastAppIntaller ")
+    output.close()
 }
