@@ -61,9 +61,9 @@ psql_location = new File(tools_psql_cmd).getParent()
 target('default': "cleanup and setup") {
     depends(setup)
     clean()
-   // install()
+    install()
     //testing:
-    i2b2Coreserver()
+    //executePostI2b2Scripts()
 }
 
 target(setup: "any initializations") {
@@ -115,8 +115,24 @@ target(install: "The installation script") {
 //    Step 2: Execute the i2b2 postgresql import scripts
     executeI2b2ImportScripts()
 
+//    Step 3: Post-i2b2 scripts (substitute for localhost, if appropriate)
+    executePostI2b2Scripts()
+
 }
 
+
+target(executePostI2b2Scripts: "the POST I2b2 Import Scripts")
+ {
+//     This includes the ETL schema objects (first, because of dependencies)
+//
+//     a. psql -h localhost -U postgres -d transmart -f i2b2-grants.sql --quiet
+//     b  psql -h localhost -U postgres -d transmart -f etl/start.sql --quiet
+//     c. psql -h localhost -U postgres -d transmart -f post-i2b2.sql --quiet
+
+     dbScriptStep("${build_dir}/transmartApp-DB/postgresql/i2b2-grants.sql", postgres_user, transmart_db_name, true, false, "${build_dir}/transmartApp-DB/postgresql")
+     dbScriptStep("${build_dir}/transmartApp-DB/postgresql/etl/start.sql", postgres_user, transmart_db_name, true, false, "${build_dir}/transmartApp-DB/postgresql")
+     dbScriptStep("${build_dir}/transmartApp-DB/postgresql/post-i2b2.sql", postgres_user, transmart_db_name, true, false, "${build_dir}/transmartApp-DB/postgresql")
+ }
 
 target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
 {
