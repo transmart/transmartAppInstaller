@@ -48,6 +48,7 @@ properties = readProperties("setupTranSMARTDevelopment.properties")
 tools_git_cmd=properties.getProperty("tools.git.cmd")
 tools_psql_cmd=properties.getProperty("tools.psql.cmd")
 tools_ant_cmd=properties.getProperty("tools.ant.cmd")
+tools_grails_cmd=properties.getProperty("tools.grails.cmd")
 locations_jboss=properties.getProperty("locations.jboss")
 
 ports_jboss=properties.getProperty("ports.jboss") //TODO jboss port can be read from ${locations_jboss}/server/default/deploy/jboss-web.deployer/server.xml
@@ -75,6 +76,7 @@ target('default': "cleanup and setup") {
     //install()
     //testing:
     //PA step 10
+    buildAndInstallRDCmodule()
 }
 
 target(setup: "any initializations") {
@@ -130,6 +132,23 @@ target(install: "The installation script") {
     executePostI2b2Scripts()
 
 }
+
+target(buildAndInstallRDCmodule: "Building and installing the RDC module")
+{
+    //git clone https://github.com/transmart/Rmodules.git   -b postgresMigrate
+    def transmartRDCDir = "${build_dir}/transmart_Rmodules"
+    gitStep("https://github.com/transmart/Rmodules.git", transmartRDCDir, "postgresMigrate")
+
+    //grails package-plugin
+    def command =  ["${tools_grails_cmd}", "package-plugin"]
+    commandStep(command, true, transmartRDCDir)
+
+    //grails install-plugin grails-rdc-rmodules-0.2.zip
+    command =  ["${tools_grails_cmd}", "install-plugin grails-rdc-rmodules-0.2.zip"]
+    commandStep(command, true, transmartRDCDir)
+
+}
+
 
 target(configTransmartApp: "setting up the configuration files in <user home>/.grails/transmartConfig/")
 {
@@ -703,7 +722,11 @@ def replacePropertyInFile(String propertiesFileName, String propertyName, String
     output.close()
 }
 
-
+/**
+ * Returns the system/user's temporary directory
+ *
+ * @return
+ */
 def getTempDir()
 {
     def result = System.getProperty("java.io.tmpdir")
