@@ -64,7 +64,7 @@ transmart_db_tablespace_location=properties.getProperty("locations.db.tablespace
 transmartuser_home=properties.getProperty("locations.transmartuser.home")
 
 //some handy derived globals:
-ant_last_step_output=build_dir + "/ant_last_step_out.txt"
+ant_last_step_output=getTempDir() + "/ant_last_step_out.txt"
 psql_location = new File(tools_psql_cmd).getParent()
 
 
@@ -73,17 +73,27 @@ psql_location = new File(tools_psql_cmd).getParent()
 target('default': "cleanup and setup") {
     depends(setup)
     clean()
-    //install()
-    //testing:
-    //PA step 10
-    buildAndInstallRDCmodule()
+    install()
+    configSteps()
+
 }
 
 target(setup: "any initializations") {
 
 }
 
-target(clean: "clean-up to run again...do we want this now?") {
+target(clean: "clean-up to run again...")
+{
+    //drop postgres "transmart" db:
+    def command =  ["${psql_location}/dropdb.exe", "-U", postgres_user, transmart_db_name]
+    commandStep(command, false)
+
+    //remove <user_home>/.grails/transmartConfig files:
+    def transmartConfigAtUserHome = transmartuser_home + "/.grails/transmartConfig"
+    delete(dir: transmartConfigAtUserHome)
+
+    //remove all git checkouts:
+    delete(dir: build_dir)
 
 }
 
@@ -115,7 +125,26 @@ target(install: "The installation script") {
 
 //   Step 1:
 //    The create-main.sql script will drop and then create schemas, objects,
-//    and seed data in the transmart database.
+//    and seed data in the transmart database. Takes quite some time
+    populateTransmartDB()
+
+//    Step 2: Execute the i2b2 postgresql import scripts
+    executeI2b2ImportScripts()
+
+//    Step 3: Post-i2b2 scripts (substitute for localhost, if appropriate)
+    executePostI2b2Scripts()
+}
+
+target(configSteps: "final configuration steps")
+{
+    configTransmartApp()
+
+    buildAndInstallRDCmodule()
+
+}
+
+target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
+{
     dbScriptStep("${build_dir}/transmartApp-DB/postgresql/create-main.sql", postgres_user, transmart_db_name, true, true, "${build_dir}/transmartApp-DB/postgresql")
 //  Verification:
 //  Verify SEARCHAPP table row counts using searchapp/data/check_counts.sql.
@@ -124,12 +153,6 @@ target(install: "The installation script") {
     verifyDEAPPdata()
 //  Verify BIOMART table row counts using biomart/data/check_counts.sql.
     verifyBIOMARTdata()
-
-//    Step 2: Execute the i2b2 postgresql import scripts
-    executeI2b2ImportScripts()
-
-//    Step 3: Post-i2b2 scripts (substitute for localhost, if appropriate)
-    executePostI2b2Scripts()
 
 }
 
@@ -178,6 +201,8 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
             include(name: "*.groovy")
         }
     }
+    //nb: the ant as in "ant.copy" above is not needed. Calling Ant tasks in a Gant closure is so common that Gant automatically
+    //tries the ant object during function lookup. Hence the ant. prefix is not needed
 
     //adjust Config.groovy:
     def configGroovy = transmartConfigAtUserHome + "/Config.groovy"
@@ -491,7 +516,7 @@ def assertEquals(value, reference)
 }
 
 
-def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, timeout=300000, output=ant_last_step_output)
+def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, timeout=600000, output=ant_last_step_output)
 {
     /*println("Executing " + command.toString() + "...")
     def proc = command.execute()
@@ -586,7 +611,7 @@ def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=tru
     {
         command.add("--quiet")
     }
-    commandStep(command, failOnError, dir, password, quiet)
+    commandStep(command, failOnError, dir, password, quiet, 6000000)//100min timeout ...
 }
 
 
