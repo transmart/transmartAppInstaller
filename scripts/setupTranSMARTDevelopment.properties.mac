@@ -1,0 +1,19 @@
+tools.git.cmd=git
+tools.psql.cmd=psql
+tools.ant.cmd=ant
+tools.grails.cmd=grails
+
+# use preconfigured JBoss 4.2.2.GA (see http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000 )
+locations.jboss=/app/transmart-dev/jboss
+
+# tomcat 5, 6, or 7
+locations.tomcat=/app/transmart-dev/tomcat
+locations.build.out=/app/transmart-dev/tmp
+locations.db.tablespaces=/app/transmart-dev/db
+locations.transmartuser.home=/Users/kees
+# location of PLINK executables
+locations.plink.executables=/usr/local/bin/plink
+
+# nb:  jboss port should be same as ${locations.jboss}/server/default/deploy/jboss-web.deployer/server.xml
+ports.jboss="9090"
+ports.solr="8080"
