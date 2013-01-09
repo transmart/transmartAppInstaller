@@ -85,7 +85,7 @@ target(setup: "any initializations") {
 target(clean: "clean-up to run again...")
 {
     //drop postgres "transmart" db:
-    def command =  ["${psql_location}/dropdb.exe", "-U", postgres_user, transmart_db_name]
+    def command =  ["${psql_location}/dropdb.exe", "-w -U", postgres_user, transmart_db_name]
     commandStep(command, false)
 
     //remove <user_home>/.grails/transmartConfig files:
@@ -441,7 +441,7 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
 target(createTransmartDB: "createTransmartDB")
 {
 
-    def command =  ["${psql_location}/dropdb.exe", "-U", postgres_user, transmart_db_name]
+    def command =  [getDirPath(psql_location, "dropdb.exe"), "-w -U", postgres_user, transmart_db_name]
     commandStep(command, false)
     removeFromScript(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql", false), "DROP DATABASE transmart;")
     dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql"), postgres_user, null, false, false)      //TODO how to send handlers as parameter
@@ -603,7 +603,7 @@ def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=fal
 {
     //e.g. D:\installations\PostgreSQL\9.2\bin\psql.exe -U postgres -d transmart -f create-main.sql --quiet
 
-    def command =  [tools_psql_cmd, "-U", user, "-f", scriptFileName]
+    def command =  [tools_psql_cmd, "-w -U", user, "-f", scriptFileName]
     //checkout specified branch :
     if (databaseName)
     {
@@ -747,6 +747,9 @@ def readProperties(propertiesFileName)
  */
 def replacePropertyInFile(String propertiesFileName, String propertyName, String newPropertyValue)
 {
+    //workaround for quotes in dir...this gives problems, so remove all
+    propertiesFileName = propertiesFileName.replaceAll("\"", "")
+
     def properties = readProperties(propertiesFileName)
     properties.setProperty(propertyName, newPropertyValue)
     def output = new FileOutputStream(propertiesFileName)
