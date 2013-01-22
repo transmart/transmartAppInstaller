@@ -72,10 +72,10 @@ psql_location = new File(tools_psql_cmd).getParent()
 
 target('default': "cleanup and setup") {
     depends(setup)
-    clean()
-    install()
-    configSteps()
-    //createTransmartDB()
+    //clean()
+    //install()
+    //configSteps()
+    executeI2b2ImportScripts()
 }
 
 target(setup: "any initializations") {
@@ -206,43 +206,44 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 
     //adjust Config.groovy:
     def configGroovy = transmartConfigAtUserHome + "/Config.groovy"
+
     replacePropertyInFile(configGroovy,
-            "com.recomdata.searchengine.index", locations_tomcat + "/appdata/transmart/index")
+            "com.recomdata.searchengine.index", locations_tomcat + "/appdata/transmart/index", true)
 
     // i2b2 project management cell url
     replacePropertyInFile(configGroovy,
-            "com.recomdata.datasetExplorer.pmServiceURL", "http://localhost:${ports_jboss}/i2b2/rest/PMService/")
+            "com.recomdata.datasetExplorer.pmServiceURL", "http://localhost:${ports_jboss}/i2b2/rest/PMService/", true)
 
     //TODO  genePattern (tool from BroadInstitute) settings?
 
     //PLINK config: Whole genome association analysis toolset from http://pngu.mgh.harvard.edu/~purcell/plink/
     replacePropertyInFile(configGroovy,
-            "com.recomdata.datasetExplorer.plinkExcutable", locations_plink_exec)
+            "com.recomdata.datasetExplorer.plinkExcutable", locations_plink_exec, true)
 
     //SOLR ("Lucene-based search server" from Apache) config:
     replacePropertyInFile(configGroovy,
-            "com.recomdata.solr.baseURL", "http://localhost:${ports_solr}")
+            "com.recomdata.solr.baseURL", "http://localhost:${ports_solr}", true)
 
 
     //This is the directory to the R plugins.
     replacePropertyInFile(configGroovy,
-            "com.recomdata.plugins.pluginScriptDirectory", locations_tomcat + "/webapps/transmart/plugins/")
+            "com.recomdata.plugins.pluginScriptDirectory", locations_tomcat + "/webapps/transmart/plugins/", true)
 
     //This is the main temporary directory, under this should be the folders that get created per job.
     replacePropertyInFile(configGroovy,
-            "com.recomdata.plugins.tempFolderDirectory", getTempDir() + "jobs")
+            "com.recomdata.plugins.tempFolderDirectory", getTempDir() + "jobs", true)
 
     //Use this to do local development.  It causes the analysis controllers to move the image file before rendering it.
     replacePropertyInFile(configGroovy,
-            "com.recomdata.plugins.transferImageFile", "true")
+            "com.recomdata.plugins.transferImageFile", "true", false)
 
     //This is the system path where we move the image file to so we can serve it.
     replacePropertyInFile(configGroovy,
-            "com.recomdata.plugins.temporaryImageFolder", locations_tomcat + "/webapps/transmart/images/tempImages/")
+            "com.recomdata.plugins.temporaryImageFolder", locations_tomcat + "/webapps/transmart/images/tempImages/", true)
 
     //some dir related to R ?
     replacePropertyInFile(configGroovy,
-            "com.recomdata.transmart.data.export.rScriptDirectory", locations_tomcat + "/webapps/transmart/dataExportRScripts")
+            "com.recomdata.transmart.data.export.rScriptDirectory", locations_tomcat + "/webapps/transmart/dataExportRScripts", true)
 
 
     //TODO : do something with com.recomdata.plugins.analysisImageURL?
@@ -732,9 +733,9 @@ def listToString(valuesList)
 //def properties = ant.getProperties();
 def readProperties(propertiesFileName)
 {
-    def propertiesFile = new FileReader(propertiesFileName);
-    def properties = new Properties();
-    properties.load(propertiesFile);
+    def propertiesFile = new FileReader(propertiesFileName)
+    def properties = new Properties()
+    properties.load(propertiesFile)
     return properties
 }
 /**
@@ -744,17 +745,25 @@ def readProperties(propertiesFileName)
  * @param propertiesFileName : .property file to change
  * @param propertyName       : the property to change (e.g. "jboss.home" )
  * @param newPropertyValue   : the new value for this property
+ * @param putQuotes          : if it is a Groovy properties file, then we should (?) quote string (like file paths)
  */
-def replacePropertyInFile(String propertiesFileName, String propertyName, String newPropertyValue)
+def replacePropertyInFile(propertiesFileName, propertyName, newPropertyValue, putQuotes = false)
 {
     //workaround for quotes in dir...this gives problems, so remove all
     propertiesFileName = propertiesFileName.replaceAll("\"", "")
+    if (putQuotes)
+        newPropertyValue = "\"" + newPropertyValue + "\""
 
+    def propertiesFileContent = file2String(propertiesFileName)
+    propertiesFileContent = propertiesFileContent.replaceAll(propertyName + ".*\\n", propertyName + " = " + newPropertyValue + "\n")
+    string2File(propertiesFileContent, propertiesFileName)
+
+    / * the implementation below is more elegant, but it messes up the properties file (both the order of the properties and the comments)
     def properties = readProperties(propertiesFileName)
     properties.setProperty(propertyName, newPropertyValue)
-    def output = new FileOutputStream(propertiesFileName)
-    properties.store(output, "# nb: " + propertyName + " changed by transmastAppIntaller ")
-    output.close()
+    def output = new FileOutputStream(propertiesFileName)   */
+    //the # character added here gives problems in Groovy parser ! properties.store(output, "# nb: " + propertyName + " changed by transmastAppIntaller ")
+    //output.close()
 }
 
 /**
