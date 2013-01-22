@@ -58,7 +58,6 @@ locations_tomcat=getProperty(properties, "locations.tomcat")
 locations_plink_exec=getProperty(properties, "locations.plink.executables")
 
 build_dir=getProperty(properties, "locations.build.out")
-postgres_user="postgres"
 transmart_db_name="transmart"  //better keep it with this value for now...script does not deal with other names for now  (e.g. still a problem in - a. Create the transmart database (can use script transmart-db.sql))
 transmart_db_tablespace_location=getProperty(properties, "locations.db.tablespaces")
 transmartuser_home=getProperty(properties, "locations.transmartuser.home")
@@ -67,8 +66,20 @@ transmartuser_home=getProperty(properties, "locations.transmartuser.home")
 ant_last_step_output=getTempDir() + "/ant_last_step_out.txt"
 psql_location = new File(tools_psql_cmd).getParent()
 
+if (System.properties['os.name'].toLowerCase().contains('windows')) host_os_type = "windows" else host_os_type = "unix"
 
-
+if (host_os_type == "windows") {
+    path_sep = "\\"
+    postgres_user = "postgres"
+    exec_postfix = ".exe"
+    postgres_login_par = "-w -U"
+}
+else {
+    path_sep = "/"
+    postgres_user = "root"
+    exec_postfix = ""
+    postgres_login_par = "-U"
+}
 
 target('default': "cleanup and setup") {
     depends(setup)
@@ -85,7 +96,7 @@ target(setup: "any initializations") {
 target(clean: "clean-up to run again...")
 {
     //drop postgres "transmart" db:
-    def command =  [getDirPath(psql_location, "dropdb.exe"), "-w -U", postgres_user, transmart_db_name]
+    def command =  [getDirPath(psql_location, "dropdb"+exec_postfix), postgres_login_par, postgres_user, transmart_db_name]
     commandStep(command, false)
 
     //remove <user_home>/.grails/transmartConfig files:
@@ -442,20 +453,23 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
 target(createTransmartDB: "createTransmartDB")
 {
 
-    def command =  [getDirPath(psql_location, "dropdb.exe"), "-w -U", postgres_user, transmart_db_name]
+    def command =  [getDirPath(psql_location, "dropdb" + exec_postfix), postgres_login_par, postgres_user, transmart_db_name]
     commandStep(command, false)
     removeFromScript(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql", false), "DROP DATABASE transmart;")
-    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql"), postgres_user, null, false, false)      //TODO how to send handlers as parameter
+    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql"), postgres_user, "postgres", false, false)      //TODO how to send handlers as parameter
 
     println("Executing alternative transmart-db.sql script to ensure creation regardless or collation problems")
     //small workaround
     def newTempScript = fixScriptCollation(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql", false))
-    dbScriptStep(newTempScript, postgres_user, null, false, false)
+    dbScriptStep(newTempScript, postgres_user, "postgres", false, false)
 
 }
 
 target(updateTablespaces: "createTablespaces")
 {
+    println("Ensure ${transmart_db_tablespace_location} tablespace location directories are present")
+    mkdir(dir: transmart_db_tablespace_location)
+    ['deapp','biomart','transmart','indx','search_app'].each { def db_dir = transmart_db_tablespace_location+path_sep+it; mkdir(dir: db_dir); chown(owner: 'postgres', type: 'dir', file: db_dir) }
     fixTablespaceLocation(getDirPath(build_dir, "transmartApp-DB/postgresql/tablespaces.sql", false))
     //nb: no need to execute this script here...just fixing it...this is a prep for a later step
 }
@@ -588,14 +602,21 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 {
     // Ant.exec could also be an option...but is not really simpler than below...
 
-    def command =  [tools_git_cmd, "clone", repositoryUrl, destDir]
-    //checkout specified branch :
-    if (branch)
-    {
-        command.add("-b")
-        command.add(branch)
+    def targetDir = new File(destDir)
+    if (!targetDir.exists()) {
+    	def command = [tools_git_cmd, 'clone', repositoryUrl, destDir]
+	//checkout specified branch :
+    	if (branch)
+    	{
+            command.add("-b")
+            command.add(branch)
+    	}
+    	commandStep(command, failOnError, ".", null, false, 600000) //TODO show progress...perhaps by reading output in a separate thread...?
     }
-    commandStep(command, failOnError, ".", null, false, 600000) //TODO show progress...perhaps by reading output in a separate thread...?
+    else {
+	def command = [tools_git_cmd, 'pull']
+	commandStep(command, failOnError, destDir, null, false, 3000)
+    }
 }
 
 
@@ -604,7 +625,7 @@ def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=fal
 {
     //e.g. D:\installations\PostgreSQL\9.2\bin\psql.exe -U postgres -d transmart -f create-main.sql --quiet
 
-    def command =  [tools_psql_cmd, "-w -U", user, "-f", scriptFileName]
+    def command =  [tools_psql_cmd, postgres_login_par, user, "-f", scriptFileName]
     //checkout specified branch :
     if (databaseName)
     {
@@ -627,7 +648,7 @@ def fixScriptCollation(String scriptFileName)
     //with
     //CREATE DATABASE transmart_db_name TEMPLATE template0;
     def scriptTemp = file2String(scriptFileName)
-    scriptTemp = scriptTemp.replace("WITH OWNER = postgres", "WITH OWNER = postgres \n TEMPLATE template0")
+    scriptTemp = scriptTemp.replace("WITH OWNER = postgres", "WITH OWNER = ${postgres_user} \n TEMPLATE template0")
     string2File(scriptTemp, scriptFileName + ".tmp")
     //workaround to support white spaces
     if (scriptFileName.contains(" "))
