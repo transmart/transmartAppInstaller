@@ -11,7 +11,7 @@ locations.tomcat=/var/lib/tomcat7
 # NB: this location locations.build.out has to be a folder name without white spaces!
 locations.build.out=/opt/transmart/build
 locations.db.tablespaces=/opt/transmart/db
-locations.transmartuser.home=/opt/transmart
+locations.transmartuser.home=/usr/share/tomcat7
 # location of PLINK executables (from   http://pngu.mgh.harvard.edu/~purcell/plink/    )
 locations.plink.executables=/opt/transmart/plink
 
