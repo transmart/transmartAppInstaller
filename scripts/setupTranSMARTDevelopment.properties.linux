@@ -16,5 +16,5 @@ locations.transmartuser.home=/usr/share/tomcat7
 locations.plink.executables=/opt/transmart/plink
 
 # nb:  jboss port should be same as ${locations.jboss}/server/default/deploy/jboss-web.deployer/server.xml
-ports.jboss="9090"
-ports.solr="8080"
+ports.jboss=9090
+ports.solr=8080
