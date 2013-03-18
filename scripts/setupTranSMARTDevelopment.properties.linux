@@ -1,3 +1,4 @@
+#use full paths
 tools.git.cmd=/usr/bin/git
 tools.psql.cmd=/usr/bin/psql
 tools.ant.cmd=/usr/bin/ant
