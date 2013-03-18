@@ -92,7 +92,6 @@ target('default': "cleanup and setup") {
     depends(setup)
     clean()
     install()
-    //executeI2b2ImportScripts()
 }
 
 target(setup: "any initializations") {
@@ -467,11 +466,6 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
 
 target(createTransmartDB: "createTransmartDB")
 {
-    //not necessary; the DROP statement is already out
-    //removeFromScript(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql", false), "DROP DATABASE transmart;")
-
-    //dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql"), postgres_user, working_db, false, false)      //TODO how to send handlers as parameter
-
     def f = File.createTempFile("createdb", ".sql")
     f << "CREATE DATABASE $transmart_db_name WITH OWNER = $postgres_user TEMPLATE template0"
 

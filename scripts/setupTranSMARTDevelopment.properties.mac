@@ -18,3 +18,6 @@ locations.plink.executables=/usr/local/bin/plink
 # nb:  jboss port should be same as ${locations.jboss}/server/default/deploy/jboss-web.deployer/server.xml
 ports.jboss="9090"
 ports.solr="8080"
+
+postgres.user=postgres # change this to your username if you are running postgres under your own user account
+postgres.workingdb=template0 # this database is connected to when creating the transmart database
