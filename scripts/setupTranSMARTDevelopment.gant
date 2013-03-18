@@ -43,40 +43,47 @@ import org.apache.tools.ant.taskdefs.Ant
 def ant = new AntBuilder();
 
 def properties = readProperties("setupTranSMARTDevelopment.properties")
+properties.getAt = { getProperty(this, it) }
 
+tools_git_cmd                    = properties["tools.git.cmd"]
+tools_psql_cmd                   = properties["tools.psql.cmd"]
+tools_ant_cmd                    = properties["tools.ant.cmd"]
+tools_grails_cmd                 = properties["tools.grails.cmd"]
+locations_jboss                  = properties["locations.jboss"]
 
-tools_git_cmd=getProperty(properties, "tools.git.cmd")
-tools_psql_cmd=getProperty(properties, "tools.psql.cmd")
-tools_ant_cmd=getProperty(properties, "tools.ant.cmd")
-tools_grails_cmd=getProperty(properties, "tools.grails.cmd")
-locations_jboss=getProperty(properties, "locations.jboss")
+ports_jboss                      = properties["ports.jboss"] //TODO jboss port can be read from ${locations_jboss}/server/default/deploy/jboss-web.deployer/server.xml
+ports_solr                       = properties["ports.solr"]
 
-ports_jboss=getProperty(properties, "ports.jboss") //TODO jboss port can be read from ${locations_jboss}/server/default/deploy/jboss-web.deployer/server.xml
-ports_solr=getProperty(properties, "ports.solr")
+locations_tomcat                 = properties["locations.tomcat"]
+locations_plink_exec             = properties["locations.plink.executables"]
 
-locations_tomcat=getProperty(properties, "locations.tomcat")
-locations_plink_exec=getProperty(properties, "locations.plink.executables")
+build_dir                        = properties["locations.build.out"]
+transmart_db_name                = "transmart"  //better keep it with this value for now...script does not deal with other names for now  (e.g. still a problem in - a. Create the transmart database (can use script transmart-db.sql))
+transmart_db_tablespace_location = properties["locations.db.tablespaces"]
+transmartuser_home               = properties["locations.transmartuser.home"]
 
-build_dir=getProperty(properties, "locations.build.out")
-transmart_db_name="transmart"  //better keep it with this value for now...script does not deal with other names for now  (e.g. still a problem in - a. Create the transmart database (can use script transmart-db.sql))
-transmart_db_tablespace_location=getProperty(properties, "locations.db.tablespaces")
-transmartuser_home=getProperty(properties, "locations.transmartuser.home")
+postgres_user                    = properties['postgres.user']
+working_db                       = properties['postgres.workingdb']
+
+webapps_subdir                   = 'applications'
+webapps_data                     = 'appdata'
 
 //some handy derived globals:
-ant_last_step_output=getTempDir() + "/ant_last_step_out.txt"
-psql_location = new File(tools_psql_cmd).getParent()
+ant_last_step_output             = getTempDir() + "/ant_last_step_out.txt"
+psql_location                    = new File(tools_psql_cmd).parent
 
-if (System.properties['os.name'].toLowerCase().contains('windows')) host_os_type = "windows" else host_os_type = "unix"
+if (System.properties['os.name'].toLowerCase().contains('windows'))
+    host_os_type = "windows"
+else
+    host_os_type = "unix"
 
 if (host_os_type == "windows") {
     path_sep = "\\"
-    postgres_user = "postgres"
     exec_postfix = ".exe"
     postgres_login_par = "-w -U"
 }
 else {
     path_sep = "/"
-    postgres_user = "postgres"
     exec_postfix = ""
     postgres_login_par = "-U"
 }
@@ -85,7 +92,6 @@ target('default': "cleanup and setup") {
     depends(setup)
     clean()
     install()
-    configSteps()
     //executeI2b2ImportScripts()
 }
 
@@ -132,18 +138,22 @@ target(install: "The installation script") {
 //    a. Create the transmart database (can use script transmart-db.sql)
     createTransmartDB()
 //    b. In tablespaces.sql, update the directory locations of the tablespaces to be created.
-    updateTablespaces()
+    ensureTablespaces()
 
 //   Step 1:
 //    The create-main.sql script will drop and then create schemas, objects,
 //    and seed data in the transmart database. Takes quite some time
     populateTransmartDB()
 
+    verifyTransmartDB()
+
 //    Step 2: Execute the i2b2 postgresql import scripts
     executeI2b2ImportScripts()
 
 //    Step 3: Post-i2b2 scripts (substitute for localhost, if appropriate)
     executePostI2b2Scripts()
+
+    configSteps()
 }
 
 target(configSteps: "final configuration steps")
@@ -157,14 +167,16 @@ target(configSteps: "final configuration steps")
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
 {
     dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/create-main.sql"), postgres_user, transmart_db_name, true, false, getDirPath(build_dir, "transmartApp-DB/postgresql", false))
-//  Verification:
+}
+
+target(verifyTransmartDB: "verify transmartDB data is OK")
+{
 //  Verify SEARCHAPP table row counts using searchapp/data/check_counts.sql.
     verifySEARCHAPPdata()
 //  Verify DEAPP table row counts using deapp/data/check_counts.sql.
     verifyDEAPPdata()
 //  Verify BIOMART table row counts using biomart/data/check_counts.sql.
     verifyBIOMARTdata()
-
 }
 
 target(buildAndInstallRDCmodule: "Building and installing the RDC module")
@@ -219,7 +231,7 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
     def configGroovy = transmartConfigAtUserHome + "/Config.groovy"
 
     replacePropertyInFile(configGroovy,
-            "com.recomdata.searchengine.index", locations_tomcat + "/appdata/transmart/index", true)
+            "com.recomdata.searchengine.index", locations_tomcat + "/" + webapps_data + "/transmart/index", true)
 
     // i2b2 project management cell url
     replacePropertyInFile(configGroovy,
@@ -238,7 +250,8 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 
     //This is the directory to the R plugins.
     replacePropertyInFile(configGroovy,
-            "com.recomdata.plugins.pluginScriptDirectory", locations_tomcat + "/webapps/transmart/plugins/", true)
+            "com.recomdata.plugins.pluginScriptDirectory",
+            locations_tomcat + "/" + webapps_subdir + "/transmart/plugins/", true)
 
     //This is the main temporary directory, under this should be the folders that get created per job.
     replacePropertyInFile(configGroovy,
@@ -250,11 +263,13 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 
     //This is the system path where we move the image file to so we can serve it.
     replacePropertyInFile(configGroovy,
-            "com.recomdata.plugins.temporaryImageFolder", locations_tomcat + "/webapps/transmart/images/tempImages/", true)
+            "com.recomdata.plugins.temporaryImageFolder",
+            locations_tomcat + "/" + webapps_subdir + "/transmart/images/tempImages/", true)
 
     //some dir related to R ?
     replacePropertyInFile(configGroovy,
-            "com.recomdata.transmart.data.export.rScriptDirectory", locations_tomcat + "/webapps/transmart/dataExportRScripts", true)
+            "com.recomdata.transmart.data.export.rScriptDirectory",
+            locations_tomcat + "/" + webapps_subdir + "/transmart/dataExportRScripts", true)
 
 
     //TODO : do something with com.recomdata.plugins.analysisImageURL?
@@ -452,24 +467,27 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
 
 target(createTransmartDB: "createTransmartDB")
 {
+    //not necessary; the DROP statement is already out
+    //removeFromScript(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql", false), "DROP DATABASE transmart;")
 
-    def command =  [getDirPath(psql_location, "dropdb" + exec_postfix), postgres_login_par, postgres_user, transmart_db_name]
-    commandStep(command, false)
-    removeFromScript(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql", false), "DROP DATABASE transmart;")
-    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql"), postgres_user, "postgres", false, false)      //TODO how to send handlers as parameter
+    //dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql"), postgres_user, working_db, false, false)      //TODO how to send handlers as parameter
 
-    println("Executing alternative transmart-db.sql script to ensure creation regardless or collation problems")
-    //small workaround
-    def newTempScript = fixScriptCollation(getDirPath(build_dir, "transmartApp-DB/postgresql/transmart-db.sql", false))
-    dbScriptStep(newTempScript, postgres_user, "postgres", false, false)
+    def f = File.createTempFile("createdb", ".sql")
+    f << "CREATE DATABASE $transmart_db_name WITH OWNER = $postgres_user TEMPLATE template0"
 
+    dbScriptStep(f.absolutePath, postgres_user, working_db, false, false)
 }
 
-target(updateTablespaces: "createTablespaces")
+target(ensureTablespaces: "createTablespaces")
 {
     println("Ensure ${transmart_db_tablespace_location} tablespace location directories are present")
     mkdir(dir: transmart_db_tablespace_location)
-    ['deapp','biomart','transmart','indx','search_app'].each { def db_dir = transmart_db_tablespace_location+path_sep+it; mkdir(dir: db_dir); chown(owner: 'postgres', type: 'dir', file: db_dir) }
+    ['deapp','biomart','transmart','indx','search_app'].each {
+        def db_dir = transmart_db_tablespace_location + path_sep + it;
+
+        mkdir(dir: db_dir);
+        chown(owner: 'postgres', type: 'dir', file: db_dir)
+    }
     fixTablespaceLocation(getDirPath(build_dir, "transmartApp-DB/postgresql/tablespaces.sql", false))
     //nb: no need to execute this script here...just fixing it...this is a prep for a later step
 }
@@ -533,17 +551,9 @@ def assertEquals(value, reference)
 
 def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, timeout=600000, output=ant_last_step_output)
 {
-    /*println("Executing " + command.toString() + "...")
-    def proc = command.execute()
-    proc.waitFor()
-    def error = new String(proc.getErrorStream().bytes)
-    if (error.length() > 0)
-    {
-        if (failOnError)
-            throw new Exception(error)
-        else
-            error.println("WARNING: " + error)
-    } */
+    println "About to execute $command on dir ${dir ? dir : 'CWD' }..."
+    System.in.read()
+    System.in.skip(System.in.available())
 
     //workaround for quotes in dir...this gives problems, so remove all
     dir = dir.replaceAll("\"", "")
@@ -603,9 +613,10 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
     // Ant.exec could also be an option...but is not really simpler than below...
 
     def targetDir = new File(destDir)
+
     if (!targetDir.exists()) {
     	def command = [tools_git_cmd, 'clone', repositoryUrl, destDir]
-	//checkout specified branch :
+	    //checkout specified branch :
     	if (branch)
     	{
             command.add("-b")
@@ -614,8 +625,18 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
     	commandStep(command, failOnError, ".", null, false, 600000) //TODO show progress...perhaps by reading output in a separate thread...?
     }
     else {
-	def command = [tools_git_cmd, 'pull']
-	commandStep(command, failOnError, destDir, null, false, 3000)
+        /* maybe we should check whether the repository is dirty/deviated from origin & abort */
+
+        def command = [tools_git_cmd, 'fetch -q origin']
+        commandStep(command, failOnError, destDir, null, false, 600000)
+
+        command = [tools_git_cmd, 'rev-parse', '--abbrev-ref', '--symbolic-full-name',  '@{u}']
+        def proc = command.execute([], targetDir)
+        proc.waitFor()
+        def ref = proc.in.text.trim()
+
+        command = [tools_git_cmd, 'reset', '--hard', '-q', ref]
+        commandStep(command, failOnError, destDir)
     }
 }
 
@@ -623,7 +644,7 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 //TODO : we can also add a parameter "host" and use -h host to execute the scripts on a remote DB...
 def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=false, dir=".", password=null)
 {
-    //e.g. D:\installations\PostgreSQL\9.2\bin\psql.exe -U postgres -d transmart -f create-main.sql --quiet
+    println "About to execute SQL script $scriptFileName"
 
     def command =  [tools_psql_cmd, postgres_login_par, user, "-f", scriptFileName]
     //checkout specified branch :
@@ -639,23 +660,6 @@ def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=fal
     commandStep(command, failOnError, dir, password, quiet, 30000000)//500min timeout ...
 }
 
-
-
-def fixScriptCollation(String scriptFileName)
-{
-    //read script file and replace
-    //CREATE DATABASE transmart_db_name
-    //with
-    //CREATE DATABASE transmart_db_name TEMPLATE template0;
-    def scriptTemp = file2String(scriptFileName)
-    scriptTemp = scriptTemp.replace("WITH OWNER = postgres", "WITH OWNER = ${postgres_user} \n TEMPLATE template0")
-    string2File(scriptTemp, scriptFileName + ".tmp")
-    //workaround to support white spaces
-    if (scriptFileName.contains(" "))
-        return "\"" + scriptFileName + ".tmp" + "\""
-    else
-        return scriptFileName + ".tmp"
-}
 
 def replaceInFile(String fileName, String value, String newValue)
 {
@@ -716,20 +720,6 @@ private static String string2File(String value, String fileName) throws IOExcept
         outFile.close();
     }
 
-}
-
-/**
- * comments out given part
- *
- * @param scriptFileName
- * @param whatToRemove
- * @return
- */
-def removeFromScript(String scriptFileName, String whatToRemove)
-{
-    def scriptTemp = file2String(scriptFileName)
-    scriptTemp = scriptTemp.replace(whatToRemove, "--" +whatToRemove)      //PA - find how to comment a line out...
-    string2File(scriptTemp, scriptFileName)
 }
 
 
