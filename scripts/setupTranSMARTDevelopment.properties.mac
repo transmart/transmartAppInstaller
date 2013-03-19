@@ -19,5 +19,7 @@ locations.plink.executables=/usr/local/bin/plink
 ports.jboss=9090
 ports.solr=8080
 
-postgres.user=postgres # change this to your username if you are running postgres under your own user account
-postgres.workingdb=template0 # this database is connected to when creating the transmart database
+# change this to your username if you are running postgres under your own user account
+postgres.user=postgres
+# this database is connected to when creating the transmart database
+postgres.workingdb=template0
