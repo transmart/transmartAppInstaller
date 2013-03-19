@@ -146,6 +146,9 @@ target(install: "The installation script") {
     verifyTransmartDB()
 
 //    Step 2: Execute the i2b2 postgresql import scripts
+
+    downloadI2B2()
+    
     executeI2b2ImportScripts()
 
 //    Step 3: Post-i2b2 scripts (substitute for localhost, if appropriate)
@@ -159,7 +162,6 @@ target(configSteps: "final configuration steps")
     configTransmartApp()
 
     buildAndInstallRDCmodule()
-
 }
 
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
@@ -190,7 +192,20 @@ target(buildAndInstallRDCmodule: "Building and installing the RDC module")
     //grails install-plugin grails-rdc-rmodules-0.2.zip
     command =  ["${tools_grails_cmd}", "install-plugin grails-rdc-rmodules-0.2.zip"]
     commandStep(command, true, transmartRDCDir)
+}
 
+target(downloadI2B2: "Downloading and installing i2b2 version of tranSMART 1.0 GA")
+{
+    def archive_file = getDirPath(build_dir, "jboss.tar.gz")
+
+    //download i2b2 archive
+    ant.get(
+        src: "http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000",
+        dest: archive_file
+    )
+
+    //extract archive
+    ant.untar(src: archive_file, dest: locations_jboss, compression: "gzip")
 }
 
 
@@ -542,7 +557,7 @@ def assertEquals(value, reference)
 }
 
 
-def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, timeout=600000, output=ant_last_step_output)
+def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, timeout=600000, output=ant_last_step_output)
 {
     println "About to execute $command on dir ${dir ? dir : 'CWD' }..."
     System.in.read()
@@ -588,13 +603,17 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, ti
 
         }
     }
+    catch(Exception e)
+    {
+        println "Exception was raised: ${e.getMessage}"
+    }
     finally
     {
-        if (!quiet)
-        {
-            if (output.equals(ant_last_step_output))
-                println("STEP OUTPUT: \n" +file2String(ant_last_step_output))
-        }
+    if (!quiet && output.equals(ant_last_step_output))
+        // Print command output to console
+        ant.concat(fileset{
+            file(name: ant_last_step_output)
+        })
     }
 
 }
@@ -635,7 +654,7 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 
 
 //TODO : we can also add a parameter "host" and use -h host to execute the scripts on a remote DB...
-def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=false, dir=".", password=null)
+def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=true, dir=".", password=null)
 {
     println "About to execute SQL script $scriptFileName"
 
