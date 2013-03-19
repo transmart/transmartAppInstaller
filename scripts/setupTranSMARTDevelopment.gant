@@ -71,6 +71,7 @@ webapps_data                     = 'appdata'
 //some handy derived globals:
 ant_last_step_output             = getTempDir() + "/ant_last_step_out.txt"
 psql_location                    = new File(tools_psql_cmd).parent
+postgres_login_par		 = "-U"
 
 if (System.properties['os.name'].toLowerCase().contains('windows'))
     host_os_type = "windows"
@@ -80,12 +81,10 @@ else
 if (host_os_type == "windows") {
     path_sep = "\\"
     exec_postfix = ".exe"
-    postgres_login_par = "-w -U"
 }
 else {
     path_sep = "/"
     exec_postfix = ""
-    postgres_login_par = "-U"
 }
 
 target('default': "cleanup and setup") {
