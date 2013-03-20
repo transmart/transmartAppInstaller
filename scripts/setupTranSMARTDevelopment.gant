@@ -546,11 +546,9 @@ def assertEquals(value, reference)
 def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, timeout=600000, output=ant_last_step_output)
 {
     println "About to execute $command on dir ${dir ? dir : 'CWD' }..."
-    System.in.read()
-    System.in.skip(System.in.available())
-
     //workaround for quotes in dir...this gives problems, so remove all
     dir = dir.replaceAll("\"", "")
+
 
     try{
 
