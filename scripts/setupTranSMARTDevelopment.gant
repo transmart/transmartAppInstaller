@@ -206,7 +206,7 @@ target(downloadI2B2: "Downloading and installing i2b2 version of tranSMART 1.0 G
 
     //extract archive and move into the target JBoss location
     ant.untar(src: archive_file, dest: build_dir, compression: "gzip")
-    ant.move(file: getDirPath(build_dir, "jboss-4.2.2"), todir: locations_jboss)
+    ant.move(file: getDirPath(build_dir, "jboss-4.2.2.GA"), todir: locations_jboss)
 
     //Download PostgreSQL driver
     ant.get(
