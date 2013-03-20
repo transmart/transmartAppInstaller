@@ -198,14 +198,21 @@ target(downloadI2B2: "Downloading and installing i2b2 version of tranSMART 1.0 G
 {
     def archive_file = getDirPath(build_dir, "jboss.tar.gz")
 
-    //download i2b2 archive
+    //Download i2b2 archive
     ant.get(
         src: "http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000",
         dest: archive_file
     )
 
-    //extract archive
-    ant.untar(src: archive_file, dest: locations_jboss, compression: "gzip")
+    //extract archive and move into the target JBoss location
+    ant.untar(src: archive_file, dest: build_dir, compression: "gzip")
+    ant.move(file: getDirPath(build_dir, "jboss-4.2.2"), todir: locations_jboss)
+
+    //Download PostgreSQL driver
+    ant.get(
+        src: "http://jdbc.postgresql.org/download/postgresql-9.2-1002.jdbc4.jar",
+        dest: getDirPath(locations_jboss,"default"+path_sep+"lib")
+    )
 }
 
 
