@@ -605,15 +605,15 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, tim
     }
     catch(Exception e)
     {
-        println "Exception was raised: ${e.getMessage}"
+        println "Exception was raised: ${e.getMessage()}"
     }
     finally
     {
     if (!quiet && output.equals(ant_last_step_output))
         // Print command output to console
-        ant.concat(fileset{
-            file(name: ant_last_step_output)
-        })
+        ant.concat { fileset(
+            file: ant_last_step_output
+        ) }
     }
 
 }
