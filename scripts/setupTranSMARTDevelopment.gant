@@ -616,14 +616,12 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, tim
     {
     if (!quiet && output.equals(ant_last_step_output))
         // Print command output to console
-        ant.concat { fileset(
+        ant.concat ( fileset(
             file: ant_last_step_output
-        ) }
+        ) )
     }
 
 }
-
-
 
 def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 {
