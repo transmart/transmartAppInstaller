@@ -71,6 +71,7 @@ webapps_data                     = 'appdata'
 //some handy derived globals:
 ant_last_step_output             = getTempDir() + "/ant_last_step_out.txt"
 psql_location                    = new File(tools_psql_cmd).parent
+postgres_login_par		 = "-U"
 
 if (System.properties['os.name'].toLowerCase().contains('windows'))
     host_os_type = "windows"
@@ -80,12 +81,10 @@ else
 if (host_os_type == "windows") {
     path_sep = "\\"
     exec_postfix = ".exe"
-    postgres_login_par = "-w -U"
 }
 else {
     path_sep = "/"
     exec_postfix = ""
-    postgres_login_par = "-U"
 }
 
 target('default': "cleanup and setup") {
@@ -147,6 +146,9 @@ target(install: "The installation script") {
     verifyTransmartDB()
 
 //    Step 2: Execute the i2b2 postgresql import scripts
+
+    downloadI2B2()
+    
     executeI2b2ImportScripts()
 
 //    Step 3: Post-i2b2 scripts (substitute for localhost, if appropriate)
@@ -160,7 +162,6 @@ target(configSteps: "final configuration steps")
     configTransmartApp()
 
     buildAndInstallRDCmodule()
-
 }
 
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
@@ -191,7 +192,27 @@ target(buildAndInstallRDCmodule: "Building and installing the RDC module")
     //grails install-plugin grails-rdc-rmodules-0.2.zip
     command =  ["${tools_grails_cmd}", "install-plugin grails-rdc-rmodules-0.2.zip"]
     commandStep(command, true, transmartRDCDir)
+}
 
+target(downloadI2B2: "Downloading and installing i2b2 version of tranSMART 1.0 GA")
+{
+    def archive_file = getDirPath(build_dir, "jboss.tar.gz")
+
+    //Download i2b2 archive
+    //ant.get(
+    //    src: "http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000",
+    //    dest: archive_file
+    //)
+
+    //extract archive and move into the target JBoss location
+    ant.untar(src: archive_file, dest: build_dir, compression: "gzip")
+    ant.move(file: getDirPath(build_dir, "jboss-4.2.2.GA"), tofile: locations_jboss + "/")
+
+    //Download PostgreSQL driver
+    ant.get(
+        src: "http://jdbc.postgresql.org/download/postgresql-9.2-1002.jdbc4.jar",
+        dest: getDirPath(locations_jboss,"server"+path_sep+"default"+path_sep+"lib")
+    )
 }
 
 
@@ -543,7 +564,7 @@ def assertEquals(value, reference)
 }
 
 
-def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, timeout=600000, output=ant_last_step_output)
+def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, timeout=600000, output=ant_last_step_output)
 {
     println "About to execute $command on dir ${dir ? dir : 'CWD' }..."
     //workaround for quotes in dir...this gives problems, so remove all
@@ -587,13 +608,17 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, ti
 
         }
     }
+    catch(Exception e)
+    {
+        println "Exception was raised: ${e.getMessage()}"
+    }
     finally
     {
-        if (!quiet)
-        {
-            if (output.equals(ant_last_step_output))
-                println("STEP OUTPUT: \n" +file2String(ant_last_step_output))
-        }
+    if (!quiet && output.equals(ant_last_step_output))
+        // Print command output to console
+        ant.concat { fileset(
+            file: ant_last_step_output
+        ) }
     }
 
 }
@@ -634,7 +659,7 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 
 
 //TODO : we can also add a parameter "host" and use -h host to execute the scripts on a remote DB...
-def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=false, dir=".", password=null)
+def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=true, dir=".", password=null)
 {
     println "About to execute SQL script $scriptFileName"
 
