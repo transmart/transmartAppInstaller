@@ -23,4 +23,4 @@ ports.solr=8080
 # change this to your username if you are running postgres under your own user account
 postgres.user=postgres
 # this database is connected to when creating the transmart database
-postgres.workingdb=template0
+postgres.workingdb=postgres
