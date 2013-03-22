@@ -166,7 +166,7 @@ target(configSteps: "final configuration steps")
 
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
 {
-    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/create-main.sql"), postgres_user, transmart_db_name, true, false, getDirPath(build_dir, "transmartApp-DB/postgresql", false))
+    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/create-main.sql"), postgres_user, transmart_db_name, true, true, getDirPath(build_dir, "transmartApp-DB/postgresql", false))
 }
 
 target(verifyTransmartDB: "verify transmartDB data is OK")
@@ -199,10 +199,10 @@ target(downloadI2B2: "Downloading and installing i2b2 version of tranSMART 1.0 G
     def archive_file = getDirPath(build_dir, "jboss.tar.gz")
 
     //Download i2b2 archive
-    //ant.get(
-    //    src: "http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000",
-    //    dest: archive_file
-    //)
+    ant.get(
+        src: "http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000",
+        dest: archive_file
+    )
 
     //extract archive and move into the target JBoss location
     ant.untar(src: archive_file, dest: build_dir, compression: "gzip")
@@ -322,15 +322,15 @@ target(executePostI2b2Scripts: "the POST I2b2 Import Scripts")
 //     b  psql -h localhost -U postgres -d transmart -f etl/start.sql --quiet
 //     c. psql -h localhost -U postgres -d transmart -f post-i2b2.sql --quiet
 
-     dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/i2b2-grants.sql"), postgres_user, transmart_db_name, true, false, getDirPath(build_dir,"transmartApp-DB/postgresql"))
-     dbScriptStep(getDirPath(build_dir,"transmartApp-DB/postgresql/etl/start.sql"), postgres_user, transmart_db_name, true, false, getDirPath(build_dir,"transmartApp-DB/postgresql"))
-     dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/post-i2b2.sql"), postgres_user, transmart_db_name, true, false, getDirPath(build_dir,"transmartApp-DB/postgresql"))
+     dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/i2b2-grants.sql"), postgres_user, transmart_db_name, true, true, getDirPath(build_dir,"transmartApp-DB/postgresql"))
+     dbScriptStep(getDirPath(build_dir,"transmartApp-DB/postgresql/etl/start.sql"), postgres_user, transmart_db_name, true, true, getDirPath(build_dir,"transmartApp-DB/postgresql"))
+     dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/post-i2b2.sql"), postgres_user, transmart_db_name, true, true, getDirPath(build_dir,"transmartApp-DB/postgresql"))
  }
 
 target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
 {
     //    a. Execute the i2b2_prerequisites.sql script
-    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/i2b2_prerequisites.sql"), postgres_user, transmart_db_name, true, false)
+    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/i2b2_prerequisites.sql"), postgres_user, transmart_db_name, true, true)
 
 //    Download i2b2 upgrades and data loading for PostgreSQL upgrade - github/transmart/i2b2_1.6_postgres
 //    Use master branch
@@ -490,7 +490,7 @@ target(createTransmartDB: "createTransmartDB")
     def f = File.createTempFile("createdb", ".sql")
     f << "CREATE DATABASE $transmart_db_name WITH OWNER = $postgres_user TEMPLATE template0"
 
-    dbScriptStep(f.absolutePath, postgres_user, working_db, false, false)
+    dbScriptStep(f.absolutePath, postgres_user, working_db, false, true)
 }
 
 target(ensureTablespaces: "createTablespaces")
@@ -566,7 +566,11 @@ def assertEquals(value, reference)
 
 def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, timeout=600000, output=ant_last_step_output)
 {
-    println "About to execute $command on dir ${dir ? dir : 'CWD' }..."
+    // Uncomment this for an interactive mode:
+    //println "About to execute $command on dir ${dir ? dir : 'CWD' }..."
+    //System.in.read()
+    //System.in.skip(System.in.available())
+
     //workaround for quotes in dir...this gives problems, so remove all
     dir = dir.replaceAll("\"", "")
 
