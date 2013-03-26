@@ -100,7 +100,8 @@ target(setup: "any initializations") {
 target(clean: "clean-up to run again...")
 {
     //drop postgres "transmart" db:
-    def command =  [getDirPath(psql_location, "dropdb"+exec_postfix), postgres_login_par, postgres_user, transmart_db_name]
+    def command =  ["sudo", "-u", postgres_user,
+                    getDirPath(psql_location, "dropdb"+exec_postfix), postgres_login_par, postgres_user, transmart_db_name]
     commandStep(command, false)
 
     //remove <user_home>/.grails/transmartConfig files:
