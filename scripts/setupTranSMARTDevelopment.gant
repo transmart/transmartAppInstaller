@@ -667,7 +667,7 @@ def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=tru
 {
     println "About to execute SQL script $scriptFileName"
 
-    def command =  [tools_psql_cmd, postgres_login_par, user, "-f", scriptFileName]
+    def command =  ["sudo", "-u", postgres_user, tools_psql_cmd, postgres_login_par, user, "-f", scriptFileName]
     //checkout specified branch :
     if (databaseName)
     {
