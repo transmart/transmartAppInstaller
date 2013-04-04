@@ -71,7 +71,7 @@ webapps_data                     = 'appdata'
 //some handy derived globals:
 ant_last_step_output             = getTempDir() + "/ant_last_step_out.txt"
 psql_location                    = new File(tools_psql_cmd).parent
-postgres_login_par		 = "-U"
+postgres_login_par               = "-U"
 
 if (System.properties['os.name'].toLowerCase().contains('windows'))
     host_os_type = "windows"
@@ -636,14 +636,14 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
     def targetDir = new File(destDir)
 
     if (!targetDir.exists()) {
-    	def command = [tools_git_cmd, 'clone', repositoryUrl, destDir]
-	    //checkout specified branch :
-    	if (branch)
-    	{
+        def command = [tools_git_cmd, 'clone', repositoryUrl, destDir]
+        //checkout specified branch :
+        if (branch)
+        {
             command.add("-b")
             command.add(branch)
-    	}
-    	commandStep(command, failOnError, ".", null, false, 600000) //TODO show progress...perhaps by reading output in a separate thread...?
+        }
+        commandStep(command, failOnError, ".", null, false, 600000) //TODO show progress...perhaps by reading output in a separate thread...?
     }
     else {
         /* maybe we should check whether the repository is dirty/deviated from origin & abort */
