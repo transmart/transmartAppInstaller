@@ -560,7 +560,66 @@ def assertEquals(value, reference)
 }
 
 
-def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, timeout=600000, output=ant_last_step_output)
+Thread tailThread(File file) {
+    def safeSize = {
+        def lastSize
+        try {
+            lastSize = file.size()
+        } catch (FileNotFoundException fnf) {
+            lastSize = 0
+        }
+        lastSize
+    }
+
+    new Thread({
+        def lastSize = safeSize()
+
+        try {
+            while (true) {
+                Thread.sleep(500)
+
+                def currentSize = safeSize()
+                if (currentSize < lastSize) {
+                    lastSize = 0
+                }
+                if (currentSize == lastSize) {
+                    continue
+                }
+
+                def fis = null
+                try {
+                    try {
+                       fis = new FileInputStream(file)
+                    } catch (FileNotFoundException fn) {
+                        continue
+                    }
+
+                    byte[] buffer = new byte[8192]
+                    int left = currentSize - lastSize
+
+                    fis.skip(lastSize)
+                    while (left > 0) {
+                        def read = fis.read(buffer, 0, Math.min(left, 8192))
+                        if (read == -1)
+                            break
+
+                        System.out.print(new String(buffer, 0, read, "ISO-8859-1"))
+                        left -= read
+                    }
+
+                    lastSize = currentSize
+                } finally {
+                    if (fis)
+                        fis.close()
+                }
+            }
+        }  catch (InterruptedException ie) {
+            // exit thread
+        }
+    } as Runnable)
+}
+
+def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, timeout = 600000, output=ant_last_step_output)
 {
     // Uncomment this for an interactive mode:
     //println "About to execute $command on dir ${dir ? dir : 'CWD' }..."
@@ -570,32 +629,21 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, tim
     //workaround for quotes in dir...this gives problems, so remove all
     dir = dir.replaceAll("\"", "")
 
+    def outputThread = null
+    if (!quiet) {
+        outputThread = tailThread(new File(output))
+        outputThread.start()
+    }
 
-    try{
-
-
+    try {
         def executable = command.get(0)
         //remove executable from list:
         command.remove(0)
         def arguments = listToString(command)//.toString().replaceAll(",", " ")
 
         println("Executing " + executable + " " +arguments.toString() )
-        //println("Failonerror= " + failOnError)
 
         def ant = new AntBuilder()   // create an antbuilder
-        if (inputString == null)
-        {
-             ant.exec(dir: dir,
-                    failonerror: failOnError,
-                    output: output,
-                    timeout: timeout,
-                    executable: executable)
-                    {
-                        arg(line: arguments)
-                    }
-        }
-        else
-        {
             ant.exec(dir: dir,
                     failonerror: failOnError,
                     inputstring: inputString,
@@ -606,7 +654,6 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, tim
                         arg(line: arguments)
                     }
 
-        }
     }
     catch(Exception e)
     {
@@ -615,12 +662,7 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, tim
     }
     finally
     {
-    if (!quiet && output.equals(ant_last_step_output))
-        // Print command output to console
-        ant.exec (executable: (host_os_type.equals("windows") ? "type" : "cat")){
-         arg(
-            line: ant_last_step_output
-        ) }
+        outputThread?.interrupt()
     }
 
 }
