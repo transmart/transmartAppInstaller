@@ -161,8 +161,6 @@ target(install: "The installation script") {
 target(configSteps: "final configuration steps")
 {
     configTransmartApp()
-
-    buildAndInstallRDCmodule()
 }
 
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
@@ -178,21 +176,6 @@ target(verifyTransmartDB: "verify transmartDB data is OK")
     verifyDEAPPdata()
 //  Verify BIOMART table row counts using biomart/data/check_counts.sql.
     verifyBIOMARTdata()
-}
-
-target(buildAndInstallRDCmodule: "Building and installing the RDC module")
-{
-    //git clone https://github.com/transmart/Rmodules.git   -b postgresMigrate
-    def transmartRDCDir = getDirPath(build_dir, "transmart_Rmodules")
-    gitStep("git://github.com/transmart/Rmodules.git", transmartRDCDir, "master")
-
-    //grails package-plugin
-    def command =  ["${tools_grails_cmd}", "package-plugin"]
-    commandStep(command, true, transmartRDCDir)
-
-    //grails install-plugin grails-rdc-rmodules-0.2.zip
-    command =  ["${tools_grails_cmd}", "install-plugin grails-rdc-rmodules-0.2.zip"]
-    commandStep(command, true, transmartRDCDir)
 }
 
 target(downloadI2B2: "Downloading and installing i2b2 version of tranSMART 1.0 GA")
