@@ -184,7 +184,7 @@ target(buildAndInstallRDCmodule: "Building and installing the RDC module")
 {
     //git clone https://github.com/transmart/Rmodules.git   -b postgresMigrate
     def transmartRDCDir = getDirPath(build_dir, "transmart_Rmodules")
-    gitStep("https://github.com/transmart/Rmodules.git", transmartRDCDir, "postgresMigrate")
+    gitStep("git://github.com/transmart/Rmodules.git", transmartRDCDir, "master")
 
     //grails package-plugin
     def command =  ["${tools_grails_cmd}", "package-plugin"]
