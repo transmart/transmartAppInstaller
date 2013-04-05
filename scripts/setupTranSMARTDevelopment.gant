@@ -88,13 +88,8 @@ else {
 }
 
 target('default': "cleanup and setup") {
-    depends(setup)
     clean()
     install()
-}
-
-target(setup: "any initializations") {
-
 }
 
 target(clean: "clean-up to run again...")
