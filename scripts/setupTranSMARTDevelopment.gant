@@ -616,6 +616,7 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=true, tim
     catch(Exception e)
     {
         println "Exception was raised: ${e.getMessage()}"
+        System.exit(1)
     }
     finally
     {
