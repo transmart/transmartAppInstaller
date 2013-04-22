@@ -142,8 +142,9 @@ target(install: "The installation script") {
     verifyTransmartDB()
 
 //    Step 2: Execute the i2b2 postgresql import scripts
-
-    downloadI2B2Driver()
+	if (locations_jboss) {
+		downloadI2B2Driver()
+	}
     
     executeI2b2ImportScripts()
 
@@ -314,7 +315,9 @@ target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
     i2b2Demodata()
 
 //    coreserver - source files for building the core i2b2 modules used by tranSMART
-    i2b2Coreserver()
+	if (jboss_location) {
+		i2b2Coreserver()
+	}
 }
 
 target(i2b2Demodata: "loading i2b2 demo data")
