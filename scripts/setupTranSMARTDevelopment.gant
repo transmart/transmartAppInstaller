@@ -175,6 +175,11 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
         out << url.openStream()
         out.close()
 
+        dbScriptStep(getDirPath(build_dir,
+                "transmartApp-DB/postgresql/tablespaces.sql"), postgres_user,
+                transmart_db_name, true, true,
+                getDirPath(build_dir, "transmartApp-DB/postgresql", false))
+
         command =  ["sudo", "-u", postgres_user,
                 psql_location + '/pg_restore',
                 '-d', transmart_db_name, file.getPath()]
