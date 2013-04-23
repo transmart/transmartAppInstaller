@@ -171,10 +171,14 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
     def file = new File(new File(build_dir), filename)
     def url = new URL("http://nebm.ist.utl.pt/~glopes/misc/$filename")
     def out = new BufferedOutputStream(new FileOutputStream(file))
+    def command
+
     try {
         out << url.openStream()
         out.close()
 
+        /* the dump does not include tablespace definitions or roles,
+         * so we have to use the scripts here */
         [
                 'tablespaces.sql',
                 'biomart_user.sql',
@@ -188,6 +192,15 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
                     transmart_db_name, true, true,
                     getDirPath(build_dir, "transmartApp-DB/postgresql", false))
         }
+
+        /* alas, the scripts above also create schemas,
+          * which have to be dropped at this point */
+        def drops = "drop schema biomart, deapp, searchapp, i2b2demodata, " +
+                "i2b2hive, i2b2metadata, i2b2pm, i2b2workdata cascade;"
+        command =  ["sudo", "-u", postgres_user, tools_psql_cmd,
+                postgres_login_par, postgres_user, "-d", transmart_db_name,
+                "-c", drops]
+        commandStep(command, true, build_dir)
 
         command =  ["sudo", "-u", postgres_user,
                 psql_location + '/pg_restore',
