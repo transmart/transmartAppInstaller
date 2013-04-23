@@ -71,7 +71,6 @@ webapps_data                     = 'appdata'
 //some handy derived globals:
 ant_last_step_output             = getTempDir() + "/ant_last_step_out.txt"
 psql_location                    = new File(tools_psql_cmd).parent
-postgres_login_par               = "-U"
 
 if (System.properties['os.name'].toLowerCase().contains('windows'))
     host_os_type = "windows"
@@ -96,7 +95,8 @@ target(clean: "clean-up to run again...")
 {
     //drop postgres "transmart" db:
     def command =  ["sudo", "-u", postgres_user,
-                    getDirPath(psql_location, "dropdb"+exec_postfix), postgres_login_par, postgres_user, transmart_db_name]
+                    getDirPath(psql_location, "dropdb"+exec_postfix), '-U',
+                    postgres_user, transmart_db_name]
     commandStep(command, false)
 
     //drop roles
@@ -740,7 +740,7 @@ def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=tru
 {
     println "About to execute SQL script $scriptFileName"
 
-    def command =  ["sudo", "-u", user, tools_psql_cmd, postgres_login_par, user, "-f", scriptFileName]
+    def command =  ["sudo", "-u", user, tools_psql_cmd, '-U', user, "-f", scriptFileName]
     //checkout specified branch :
     if (databaseName)
     {
