@@ -102,7 +102,7 @@ target(clean: "clean-up to run again...")
     //drop roles
     def dropRoles = 'drop role biomart, biomart_user, deapp, i2b2demodata, ' +
             'i2b2hive, i2b2metadata, i2b2pm, i2b2workdata, searchapp;'
-    dbCommand(dropRoles, postgres_user, transmart_db_name, false)
+    dbCommand(dropRoles, postgres_user, working_db, false)
 
     //remove <user_home>/.grails/transmartConfig files:
     def transmartConfigAtUserHome = transmartuser_home + "/.grails/transmartConfig"
