@@ -99,6 +99,11 @@ target(clean: "clean-up to run again...")
                     getDirPath(psql_location, "dropdb"+exec_postfix), postgres_login_par, postgres_user, transmart_db_name]
     commandStep(command, false)
 
+    //drop roles
+    def dropRoles = 'drop role biomart, biomart_user, deapp, i2b2demodata, ' +
+            'i2b2hive, i2b2metadata, i2b2pm, i2b2workdata, searchapp;'
+    dbCommand(dropRoles, postgres_user, transmart_db_name, false)
+
     //remove <user_home>/.grails/transmartConfig files:
     def transmartConfigAtUserHome = transmartuser_home + "/.grails/transmartConfig"
     delete(dir: transmartConfigAtUserHome)
@@ -197,9 +202,8 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
           * which have to be dropped at this point */
         def drops = "drop schema biomart, deapp, searchapp, i2b2demodata, " +
                 "i2b2hive, i2b2metadata, i2b2pm, i2b2workdata cascade;"
-        command =  ["sudo", "-u", postgres_user, tools_psql_cmd,
-                postgres_login_par, postgres_user, "-d", transmart_db_name,
-                "-c", drops]
+        dbCommand(drops, postgres_user, transmart_db_name, true)
+
         commandStep(command, true, build_dir)
 
         command =  ["sudo", "-u", postgres_user,
@@ -721,6 +725,15 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
     }
 }
 
+
+def dbCommand(sqlCommand, user, databaseName, failOnError)
+{
+    println "About to execute SQL command $command"
+
+    def command =  ["sudo", "-u", user, tools_psql_cmd, '-U', user,
+            "-d", databaseName, '-c', sqlCommand]
+    commandStep(command, failOnError)
+}
 
 //TODO : we can also add a parameter "host" and use -h host to execute the scripts on a remote DB...
 def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=true, dir=".", password=null)
