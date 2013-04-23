@@ -335,7 +335,7 @@ target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
     i2b2Demodata()
 
 //    coreserver - source files for building the core i2b2 modules used by tranSMART
-	if (jboss_location) {
+	if (locations_jboss) {
 		i2b2Coreserver()
 	}
 }
