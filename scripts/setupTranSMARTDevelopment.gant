@@ -730,7 +730,7 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 
 def dbCommand(sqlCommand, user, databaseName, failOnError)
 {
-    println "About to execute SQL command $command"
+    println "About to execute SQL command $sqlCommand"
 
     def command =  ["sudo", "-u", user, tools_psql_cmd, '-U', user,
             "-d", databaseName, '-c', sqlCommand]
