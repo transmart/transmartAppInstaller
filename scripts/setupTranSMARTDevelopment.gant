@@ -664,9 +664,9 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, ti
         def executable = command.get(0)
         //remove executable from list:
         command.remove(0)
-        def arguments = listToString(command)//.toString().replaceAll(",", " ")
 
-        println("Executing " + executable + " " +arguments.toString() )
+        println("Executing " + executable + " " +
+                command.collect { "'$it'" }.join(" ") )
 
         def ant = new AntBuilder()   // create an antbuilder
             ant.exec(dir: dir,
@@ -676,7 +676,9 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, ti
                     timeout: timeout,
                     executable: executable)
                     {
-                        arg(line: arguments)
+                        command.each {
+                            arg(value: it)
+                        }
                     }
 
     }
@@ -814,23 +816,6 @@ private static String string2File(String value, String fileName) throws IOExcept
         outFile.close();
     }
 
-}
-
-
-/**
- * This method will translate the given list to a \n separated string
- *
- * @param valuesList
- * @return
- */
-def listToString(valuesList)
-{
-    String result = "";
-    for (String value : valuesList)
-    {
-        result += value + " ";
-    }
-    return result;
 }
 
 //Alternative for ant.property method which does not seem to work...
