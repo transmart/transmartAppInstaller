@@ -43,7 +43,10 @@ import org.apache.tools.ant.taskdefs.Ant
 def ant = new AntBuilder();
 
 def properties = readProperties("setupTranSMARTDevelopment.properties")
-properties.getAt = { getProperty(this, it) }
+properties.getAt = { delegate.getProperty(it) }
+
+String.metaClass.or = { String s -> new File(delegate, s).path }
+File.metaClass.or = { String s -> new File(delegate, s).path }
 
 tools_git_cmd                    = properties["tools.git.cmd"]
 tools_psql_cmd                   = properties["tools.psql.cmd"]
@@ -69,7 +72,7 @@ webapps_subdir                   = 'applications'
 webapps_data                     = 'appdata'
 
 //some handy derived globals:
-ant_last_step_output             = getTempDir() + "/ant_last_step_out.txt"
+ant_last_step_output             = new File(getTempDir(), "ant_last_step_out.txt")
 psql_location                    = new File(tools_psql_cmd).parent
 
 if (System.properties['os.name'].toLowerCase().contains('windows'))
@@ -78,11 +81,9 @@ else
     host_os_type = "unix"
 
 if (host_os_type == "windows") {
-    path_sep = "\\"
     exec_postfix = ".exe"
 }
 else {
-    path_sep = "/"
     exec_postfix = ""
 }
 
@@ -95,8 +96,8 @@ target(clean: "clean-up to run again...")
 {
     //drop postgres "transmart" db:
     def command =  ["sudo", "-u", postgres_user,
-                    getDirPath(psql_location, "dropdb"+exec_postfix), '-U',
-                    postgres_user, transmart_db_name]
+                    psql_location | ("dropdb" + exec_postfix),
+                    '-U', postgres_user, transmart_db_name]
     commandStep(command, false)
 
     //drop roles
@@ -105,11 +106,10 @@ target(clean: "clean-up to run again...")
     dbCommand(dropRoles, postgres_user, working_db, false)
 
     //remove <user_home>/.grails/transmartConfig files:
-    def transmartConfigAtUserHome = transmartuser_home + "/.grails/transmartConfig"
-    delete(dir: transmartConfigAtUserHome)
+    delete(dir: transmartuser_home | ".grails/transmartConfig")
 
     //remove all git checkouts:
-    delete(dir: build_dir.replaceAll("\"", "")) //delete command apparently does not work well with quotes..so remove them..
+    delete(dir: build_dir)
 
 }
 
@@ -125,7 +125,8 @@ target(install: "The installation script") {
 //    git checkout -b postgresMigrate origin/postgresMigrate
 //    Build initiial PostgreSQL databases (for both transMart and i2b2)
 //    cd postgresql , then instructions in readme
-    gitStep("git://github.com/transmart/transmartApp-DB.git", getDirPath(build_dir,"transmartApp-DB"), "postgresMigrate", true)
+    gitStep("git://github.com/transmart/transmartApp-DB.git",
+            build_dir | "transmartApp-DB", "postgresMigrate", true)
 
 //    There are 3 main steps to creating the transmart database:
 //    1.  Create the transmart schemas (and all objects not part of i2b2 or ETL)
@@ -167,13 +168,13 @@ target(configSteps: "final configuration steps")
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
 {
     /* See if we have a dump for this version of transmartApp-DB */
-    def dir = new File(new File(getDirPath(build_dir,"transmartApp-DB")), '.git')
+    def dir = build_dir | "transmartApp-DB" | '.git'
     //content: 'ref: refs/heads/postgresql-branch'
     def head = new File(dir, 'HEAD').text.trim().split(/ /)[1]
     def rev = new File(dir, head).text[0..6]
 
     def filename = "dump_${rev}_db"
-    def file = new File(new File(build_dir), filename)
+    def file = new File(build_dir, filename)
     def url = new URL("http://nebm.ist.utl.pt/~glopes/misc/$filename")
     def out = new BufferedOutputStream(new FileOutputStream(file))
     def command
@@ -192,10 +193,9 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
                 'deapp/prerequisites.sql',
                 'i2b2_prerequisites.sql',
         ].each {
-            dbScriptStep(getDirPath(build_dir,
-                    "transmartApp-DB/postgresql/$it"), postgres_user,
-                    transmart_db_name, true, true,
-                    getDirPath(build_dir, "transmartApp-DB/postgresql", false))
+            dbScriptStep(build_dir | "transmartApp-DB/postgresql" | it,
+                    postgres_user, transmart_db_name, true, true,
+                    build_dir | "transmartApp-DB/postgresql", false)
         }
 
         /* alas, the scripts above also create schemas,
@@ -210,7 +210,10 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
         commandStep(command, true, build_dir)
     } catch (e) {
         println "Could not download or import dump file; reverting to SQL scripts"
-        dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/create-main.sql"), postgres_user, transmart_db_name, true, true, getDirPath(build_dir, "transmartApp-DB/postgresql", false))
+        dbScriptStep(build_dir |
+                "transmartApp-DB/postgresql/create-main.sql",
+                postgres_user, transmart_db_name, true, true,
+                build_dir | "transmartApp-DB/postgresql", false)
     }
 }
 
@@ -229,7 +232,7 @@ target(downloadI2B2Driver: "Downloading postgresql driver for i2b2")
     //Download PostgreSQL driver
     ant.get(
         src: "http://jdbc.postgresql.org/download/postgresql-9.2-1002.jdbc4.jar",
-        dest: getDirPath(locations_jboss,"server"+path_sep+"default"+path_sep+"lib")
+        dest: locations_jboss | "server" | "default" | "lib"
     )
 }
 
@@ -237,7 +240,7 @@ target(downloadI2B2Driver: "Downloading postgresql driver for i2b2")
 target(configTransmartApp: "setting up the configuration files in <user home>/.grails/transmartConfig/")
 {
     //git clone https://github.com/transmart/transmartApp-Config.git  branch   postgresMigrate
-    def transmartConfigDir = getDirPath(build_dir, "transmartApp-Config")
+    def transmartConfigDir = build_dir | "transmartApp-Config"
     gitStep("git://github.com/transmart/transmartApp-Config.git", transmartConfigDir, "postgresMigrate")
 
 //    Checkout contains:
@@ -253,7 +256,7 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 //    of the application, and the name of the application is set in the file
 //    application.properties in the top level directory of transmartApp. For now, this script is assuming the name "transmart" is set.
 
-    def transmartConfigAtUserHome = transmartuser_home + "/.grails/transmartConfig"
+    def transmartConfigAtUserHome = transmartuser_home | ".grails/transmartConfig"
     mkdir(dir: transmartConfigAtUserHome)
 
     //Copy all .groovy files to this folder:
@@ -266,10 +269,11 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
     //tries the ant object during function lookup. Hence the ant. prefix is not needed
 
     //adjust Config.groovy:
-    def configGroovy = transmartConfigAtUserHome + "/Config.groovy"
+    def configGroovy = transmartConfigAtUserHome | "Config.groovy"
 
     replacePropertyInFile(configGroovy,
-            "com.recomdata.searchengine.index", locations_tomcat + "/" + webapps_data + "/transmart/index", true)
+            "com.recomdata.searchengine.index",
+            locations_tomcat | webapps_data | "transmart/index", true)
 
     // i2b2 project management cell url
     replacePropertyInFile(configGroovy,
@@ -289,11 +293,12 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
     //This is the directory to the R plugins.
     replacePropertyInFile(configGroovy,
             "com.recomdata.plugins.pluginScriptDirectory",
-            locations_tomcat + "/" + webapps_subdir + "/transmart/plugins/", true)
+            locations_tomcat | webapps_subdir | "transmart/plugins/", true)
 
     //This is the main temporary directory, under this should be the folders that get created per job.
     replacePropertyInFile(configGroovy,
-            "com.recomdata.plugins.tempFolderDirectory", getTempDir() + "jobs", true)
+            "com.recomdata.plugins.tempFolderDirectory",
+            getTempDir() | "jobs", true)
 
     //Use this to do local development.  It causes the analysis controllers to move the image file before rendering it.
     replacePropertyInFile(configGroovy,
@@ -302,12 +307,12 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
     //This is the system path where we move the image file to so we can serve it.
     replacePropertyInFile(configGroovy,
             "com.recomdata.plugins.temporaryImageFolder",
-            locations_tomcat + "/" + webapps_subdir + "/transmart/images/tempImages/", true)
+            locations_tomcat | webapps_subdir | "transmart/images/tempImages", true)
 
     //some dir related to R ?
     replacePropertyInFile(configGroovy,
             "com.recomdata.transmart.data.export.rScriptDirectory",
-            locations_tomcat + "/" + webapps_subdir + "/transmart/dataExportRScripts", true)
+            locations_tomcat | webapps_subdir | "transmart/dataExportRScripts", true)
 
 
     //TODO : do something with com.recomdata.plugins.analysisImageURL?
@@ -323,11 +328,13 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
     //    tempFolderDirectory
     //    temporaryImageFolder (writable)
     //    imageURL (corresponds to temporaryImageFolder) - TODO - check how this can be used...?
-    def rmodulesGroovy = transmartConfigAtUserHome + "/RModulesConfig.groovy"
+    def rmodulesGroovy = transmartConfigAtUserHome | "RModulesConfig.groovy"
     //pluginScriptDirectory, temporaryImageFolder
     replaceInFile(rmodulesGroovy, "/your/tomcat", locations_tomcat)
      //tempFolderDirectory
-    replaceInFile(rmodulesGroovy, "tempFolderDirectory = \"/var/tmp/jobs/\"", "tempFolderDirectory = \"" + getTempDir() +"jobs/\"" )
+    replaceInFile(rmodulesGroovy,
+            "tempFolderDirectory = \"/var/tmp/jobs/\"",
+            "tempFolderDirectory = \"" + getTempDir() +"jobs/\"" )
 
 }
 
@@ -340,19 +347,28 @@ target(executePostI2b2Scripts: "the POST I2b2 Import Scripts")
 //     b  psql -h localhost -U postgres -d transmart -f etl/start.sql --quiet
 //     c. psql -h localhost -U postgres -d transmart -f post-i2b2.sql --quiet
 
-     dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/i2b2-grants.sql"), postgres_user, transmart_db_name, true, true, getDirPath(build_dir,"transmartApp-DB/postgresql"))
-     dbScriptStep(getDirPath(build_dir,"transmartApp-DB/postgresql/etl/start.sql"), postgres_user, transmart_db_name, true, true, getDirPath(build_dir,"transmartApp-DB/postgresql"))
-     dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/post-i2b2.sql"), postgres_user, transmart_db_name, true, true, getDirPath(build_dir,"transmartApp-DB/postgresql"))
+     dbScriptStep(build_dir | "transmartApp-DB/postgresql/i2b2-grants.sql",
+             postgres_user, transmart_db_name, true, true,
+             build_dir | "transmartApp-DB/postgresql")
+
+     dbScriptStep(build_dir | "transmartApp-DB/postgresql/etl/start.sql",
+             postgres_user, transmart_db_name, true, true,
+             build_dir | "transmartApp-DB/postgresql")
+
+     dbScriptStep(build_dir | "transmartApp-DB/postgresql/post-i2b2.sql",
+             postgres_user, transmart_db_name, true, true,
+             build_dir | "transmartApp-DB/postgresql")
  }
 
 target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
 {
     //    a. Execute the i2b2_prerequisites.sql script
-    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/i2b2_prerequisites.sql"), postgres_user, transmart_db_name, true, true)
+    dbScriptStep(build_dir | "transmartApp-DB/postgresql/i2b2_prerequisites.sql",
+            postgres_user, transmart_db_name, true, true)
 
 //    Download i2b2 upgrades and data loading for PostgreSQL upgrade - github/transmart/i2b2_1.6_postgres
 //    Use master branch
-    def i2b2Dir = getDirPath(build_dir, "i2b2_1.6_postgres")
+    def i2b2Dir = build_dir | "i2b2_1.6_postgres"
     gitStep("git://github.com/transmart/i2b2_1.6_Postgres.git", i2b2Dir)
 
 //    a2.  Execute the i2b2 postgresql import scripts
@@ -371,8 +387,9 @@ target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
 
 target(i2b2Demodata: "loading i2b2 demo data")
 {
-    def i2b2Dir = getDirPath(build_dir, "i2b2_1.6_postgres")  //TODO remove this redundant line of code...
-    def demodataDir = i2b2Dir + "/demodata/src/src/edu.harvard.i2b2.data/Release_1-6/NewInstall/"
+    def i2b2Dir = build_dir | "i2b2_1.6_postgres"  //TODO remove this
+    // redundant line of code...
+    def demodataDir = i2b2Dir | "demodata/src/src/edu.harvard.i2b2.data/Release_1-6/NewInstall/"
     //    1. Set appropriate values for properties mentioned in db.properties file    //TODO - db.properties are not yet updated here
     def command =  ["${tools_ant_cmd}", "setup_db_properties"]
     commandStep(command, true, demodataDir)
@@ -388,23 +405,21 @@ target(i2b2Demodata: "loading i2b2 demo data")
     commandStep(command, true, demodataDir)
 }
 
-
-//TODO: check if this target is needed for DEVELOPMENT setup...or is it just prod...? Anyway, it is working.
 target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by tranSMART")
 {
-    def i2b2Dir = getDirPath(build_dir, "i2b2_1.6_postgres")  //TODO remove this redundant line of code...
+    def i2b2Dir = build_dir | "i2b2_1.6_postgres"
 //    coreserver - source files for building the core i2b2 modules used by tranSMART
-    def coreserver_subdir = i2b2Dir + "/coreserver/src"
+    def coreserver_subdir = i2b2Dir | "coreserver/src"
 //
 //    SUMMARY of all the files that need modification
 //    (relative to BASE_DIR)
 //    ./edu.harvard.i2b2.common/build.properties
 //    jboss.home=YOUR_JBOSS_HOME_DIR
 //    ant clean dist deploy jboss_pre_deployment_setup
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.common/build.properties",
+    replacePropertyInFile(coreserver_subdir | "edu.harvard.i2b2.common/build.properties",
                             "jboss.home", locations_jboss)
     def command =  ["${tools_ant_cmd}", "clean dist deploy jboss_pre_deployment_setup"]
-    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.common")
+    commandStep(command, true, coreserver_subdir | "edu.harvard.i2b2.common")
 //
 //    ./edu.harvard.i2b2.pm/build.properties
 //    jboss.home=YOUR_JBOSS_HOME_DIR
@@ -413,7 +428,7 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
 //     you may have to modify: connection-url, user-name, and password
     //<<<<<<<
 //    ant -f master_build.xml clean build-all deploy
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.pm/build.properties",
+    replacePropertyInFile(coreserver_subdir | "edu.harvard.i2b2.pm/build.properties",
             "jboss.home", locations_jboss)
     command =  ["${tools_ant_cmd}", "-f master_build.xml clean build-all deploy"]
     commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.pm")
@@ -517,18 +532,21 @@ target(ensureTablespaces: "createTablespaces")
     println("Ensure ${transmart_db_tablespace_location} tablespace location directories are present")
     mkdir(dir: transmart_db_tablespace_location)
     ['deapp','biomart','transmart','indx','search_app'].each {
-        def db_dir = transmart_db_tablespace_location + path_sep + it;
+        def db_dir = transmart_db_tablespace_location | it;
 
         mkdir(dir: db_dir);
         chown(owner: 'postgres', type: 'dir', file: db_dir)
     }
-    fixTablespaceLocation(getDirPath(build_dir, "transmartApp-DB/postgresql/tablespaces.sql", false))
+    fixTablespaceLocation(build_dir | "transmartApp-DB/postgresql/tablespaces.sql", false)
     //nb: no need to execute this script here...just fixing it...this is a prep for a later step
 }
 
 target(verifySEARCHAPPdata: "verify SEARCHAPP data")
 {
-    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/searchapp/data/check_counts.sql"), postgres_user, transmart_db_name, true, false, ".")
+    dbScriptStep(build_dir |
+            "transmartApp-DB/postgresql/searchapp/data/check_counts.sql",
+            postgres_user, transmart_db_name, true, false, ".")
+
     //TODO - below should work but is hanging as ant.exec does not seem to be passing the given inputstring to the stdin...so process is hanging waiting for biomart_user's password.
     //TODO (CONT) -       So find out why ant is failing here and how to fix it...looked at various sites but could not find an answer or similar case...
     //dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/searchapp/data/check_counts.sql"), "biomart_user", transmart_db_name, true, false, ".", "biomart_user")
@@ -546,7 +564,9 @@ target(verifySEARCHAPPdata: "verify SEARCHAPP data")
 
 target(verifyDEAPPdata: "verify DEAPP data")
 {
-    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/deapp/data/check_counts.sql"), postgres_user, transmart_db_name, true, false, ".")
+    dbScriptStep(build_dir |
+            "transmartApp-DB/postgresql/deapp/data/check_counts.sql",
+            postgres_user, transmart_db_name, true, false, ".")
 
     FileReader reader = new FileReader(ant_last_step_output)
     def lines = reader.readLines()
@@ -560,7 +580,9 @@ target(verifyDEAPPdata: "verify DEAPP data")
 
 target(verifyBIOMARTdata: "verify DEAPP data")
 {
-    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/biomart/data/check_counts.sql"), postgres_user, transmart_db_name, true, false, ".")
+    dbScriptStep(build_dir |
+            "transmartApp-DB/postgresql/biomart/data/check_counts.sql",
+            postgres_user, transmart_db_name, true, false, ".")
 
     FileReader reader = new FileReader(ant_last_step_output)
     def lines = reader.readLines()
@@ -861,50 +883,5 @@ def replacePropertyInFile(propertiesFileName, propertyName, newPropertyValue, pu
  */
 def getTempDir()
 {
-    def result = System.getProperty("java.io.tmpdir")
-    //replace \\ by / :
-    result = result.replaceAll("\\\\", "/")
-    return result
-}
-
-/**
- * Returns the property value and adds quotes to it if necessary (e.g. property has white space in it)
- *
- * @param properties
- * @param s
- * @return
- */
-def getProperty(Properties properties, String propertyName)
-{
-    def propertyValue = properties.getProperty(propertyName)
-    //check if property has white space. If yes, add quotes where necessary
-    if (propertyValue.contains(" "))
-    {
-        if (!propertyValue.startsWith("\""))
-            propertyValue = "\"" + propertyValue
-
-        if (!propertyValue.endsWith("\""))
-            propertyValue = propertyValue + "\""
-
-    }
-    return propertyValue
-}
-
-/**
- * This method is a workaround for problems in directory names when one of the directories has a white space
- *
- * @param dir : the directory to which we want to concatenate an extra part
- * @param subPath : part of the directory or file name path to concatenate to the directory in "dir"
- * @addQuotes: whether the final concatenated pathname should have surrounding quotes or not. For some APIs (like the Java File API) the
- *             quotes will cause errors, while in others it is absolutely necessary.
- */
-def getDirPath(dir, subPath, addQuotes=true)
-{
-   //if dir has a white space, the concat of dir + subdir should be surrounded by quotes,
-   //but first remove all quotes from dir:
-   dir = dir.replaceAll("\"", "")
-   if (dir.contains(" ") && addQuotes)
-        return "\"" + dir + "/" + subPath + "\""
-   else
-        return dir + "/" + subPath
+    System.getProperty("java.io.tmpdir")
 }
