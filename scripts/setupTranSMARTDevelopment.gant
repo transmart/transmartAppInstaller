@@ -161,7 +161,28 @@ target(configSteps: "final configuration steps")
 
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
 {
-    dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/create-main.sql"), postgres_user, transmart_db_name, true, true, getDirPath(build_dir, "transmartApp-DB/postgresql", false))
+    /* See if we have a dump for this version of transmartApp-DB */
+    def dir = new File(new File(getDirPath(build_dir,"transmartApp-DB")), '.git')
+    //content: 'ref: refs/heads/postgresql-branch'
+    def head = new File(dir, 'HEAD').text.trim().split(/ /)[1]
+    def rev = new File(dir, head).text[0..6]
+
+    def filename = "dump_${rev}_db"
+    def file = new File(new File(build_dir), filename)
+    def url = new URL("http://nebm.ist.utl.pt/~glopes/misc/$filename")
+    def out = new BufferedOutputStream(new FileOutputStream(file))
+    try {
+        out << url.openStream()
+        out.close()
+
+        command =  ["sudo", "-u", postgres_user,
+                psql_location + '/pg_restore',
+                '-d', transmart_db_name, file.getPath()]
+        commandStep(command, true, build_dir)
+    } catch (e) {
+        println "Could not download or import dump file; reverting to SQL scripts"
+        dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/create-main.sql"), postgres_user, transmart_db_name, true, true, getDirPath(build_dir, "transmartApp-DB/postgresql", false))
+    }
 }
 
 target(verifyTransmartDB: "verify transmartDB data is OK")
