@@ -120,7 +120,7 @@ target(install: "The installation script") {
 //    git checkout -b postgresMigrate origin/postgresMigrate
 //    Build initiial PostgreSQL databases (for both transMart and i2b2)
 //    cd postgresql , then instructions in readme
-    gitStep("https://github.com/transmart/transmartApp-DB", getDirPath(build_dir,"transmartApp-DB"), "postgresMigrate", true)
+    gitStep("git://github.com/transmart/transmartApp-DB.git", getDirPath(build_dir,"transmartApp-DB"), "postgresMigrate", true)
 
 //    There are 3 main steps to creating the transmart database:
 //    1.  Create the transmart schemas (and all objects not part of i2b2 or ETL)
@@ -216,7 +216,7 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 {
     //git clone https://github.com/transmart/transmartApp-Config.git  branch   postgresMigrate
     def transmartConfigDir = getDirPath(build_dir, "transmartApp-Config")
-    gitStep("https://github.com/transmart/transmartApp-Config.git", transmartConfigDir, "postgresMigrate")
+    gitStep("git://github.com/transmart/transmartApp-Config.git", transmartConfigDir, "postgresMigrate")
 
 //    Checkout contains:
 //    External configuration files for transmart application
@@ -331,8 +331,7 @@ target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
 //    Download i2b2 upgrades and data loading for PostgreSQL upgrade - github/transmart/i2b2_1.6_postgres
 //    Use master branch
     def i2b2Dir = getDirPath(build_dir, "i2b2_1.6_postgres")
-    gitStep("https://github.com/transmart/i2b2_1.6_Postgres.git", i2b2Dir)
-    //same as git@github.com:transmart/i2b2_1.6_Postgres.git? TODO: check
+    gitStep("git://github.com/transmart/i2b2_1.6_Postgres.git", i2b2Dir)
 
 //    a2.  Execute the i2b2 postgresql import scripts
 //    From i2b2Dir/readme :
