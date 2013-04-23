@@ -714,7 +714,7 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
     else {
         /* maybe we should check whether the repository is dirty/deviated from origin & abort */
 
-        def command = [tools_git_cmd, 'fetch -q origin']
+        def command = [tools_git_cmd, 'fetch', '-q', 'origin']
         commandStep(command, failOnError, destDir, null, false, 600000)
 
         command = [tools_git_cmd, 'rev-parse', '--abbrev-ref', '--symbolic-full-name',  '@{u}']
