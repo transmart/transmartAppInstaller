@@ -204,8 +204,6 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
                 "i2b2hive, i2b2metadata, i2b2pm, i2b2workdata cascade;"
         dbCommand(drops, postgres_user, transmart_db_name, true)
 
-        commandStep(command, true, build_dir)
-
         command =  ["sudo", "-u", postgres_user,
                 psql_location + '/pg_restore',
                 '-d', transmart_db_name, file.getPath()]
