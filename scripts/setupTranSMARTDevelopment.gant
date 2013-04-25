@@ -412,15 +412,15 @@ target(i2b2Demodata: "loading i2b2 demo data")
     //    1. Set appropriate values for properties mentioned in db.properties file    //TODO - db.properties are not yet updated here
     def command =  ["${tools_ant_cmd}", "setup_db_properties"]
     commandStep(command, true, demodataDir)
-    command =  ["${tools_ant_cmd}", "load_pmdata"]
+    command =  ["${tools_ant_cmd}", "-q", "load_pmdata"]
     commandStep(command, true, demodataDir)
-    command =  ["${tools_ant_cmd}", "load_hivedata"]
+    command =  ["${tools_ant_cmd}", "-q", "load_hivedata"]
     commandStep(command, true, demodataDir)
-    command =  ["${tools_ant_cmd}", "load_demodata"]
+    command =  ["${tools_ant_cmd}", "-q", "load_demodata"]
     commandStep(command, true, demodataDir)
-    command =  ["${tools_ant_cmd}", "load_metadata"]
+    command =  ["${tools_ant_cmd}", "-q", "load_metadata"]
     commandStep(command, true, demodataDir)
-    command =  ["${tools_ant_cmd}", "load_workdata"]
+    command =  ["${tools_ant_cmd}", "-q", "load_workdata"]
     commandStep(command, true, demodataDir)
 }
 
