@@ -52,7 +52,7 @@ tools_git_cmd                    = properties["tools.git.cmd"]
 tools_psql_cmd                   = properties["tools.psql.cmd"]
 tools_ant_cmd                    = properties["tools.ant.cmd"]
 tools_grails_cmd                 = properties["tools.grails.cmd"]
-locations_jboss                  = properties["locations.jboss"]
+locations_jboss                  = properties["locations.jboss"] //leave empty in order not to setup i2b2 runtime
 
 ports_jboss                      = properties["ports.jboss"] //TODO jboss port can be read from ${locations_jboss}/server/default/deploy/jboss-web.deployer/server.xml
 ports_solr                       = properties["ports.solr"]
