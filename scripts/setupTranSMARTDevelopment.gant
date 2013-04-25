@@ -556,7 +556,7 @@ target(ensureTablespaces: "createTablespaces")
         mkdir(dir: db_dir);
         chown(owner: 'postgres', type: 'dir', file: db_dir)
     }
-    fixTablespaceLocation(build_dir | "transmartApp-DB/postgresql/tablespaces.sql", false)
+    fixTablespaceLocation(build_dir | "transmartApp-DB/postgresql/tablespaces.sql")
     //nb: no need to execute this script here...just fixing it...this is a prep for a later step
 }
 
