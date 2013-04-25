@@ -65,7 +65,7 @@ transmart_db_name                = "transmart"  //better keep it with this value
 transmart_db_tablespace_location = properties["locations.db.tablespaces"]
 transmartuser_home               = properties["locations.transmartuser.home"]
 
-postgres_user                    = properties['postgres.user']
+postgres_user                    = properties['postgres.user'] // database user
 working_db                       = properties['postgres.workingdb']
 
 webapps_subdir                   = 'applications'
@@ -87,6 +87,23 @@ else {
     exec_postfix = ""
 }
 
+//Test whether we want to change user
+psql_sudo_user = null
+if (host_os_type == 'unix') {
+    def result = commandStep([tools_psql_cmd, "-U", postgres_user, "-d",
+            working_db, '-c', 'select 1'], false)
+    if (!result) {
+        result = commandStep(['sudo', '-u', postgres_user, tools_psql_cmd,
+                "-U", postgres_user, "-d", working_db, '-c', 'select 1'], false)
+        if (result) {
+            psql_sudo_user = true
+        } else {
+            System.err.println("Could not connect to the database. Check settings")
+            System.exit(1)
+        }
+    }
+}
+
 target('default': "cleanup and setup") {
     clean()
     install()
@@ -95,15 +112,17 @@ target('default': "cleanup and setup") {
 target(clean: "clean-up to run again...")
 {
     //drop postgres "transmart" db:
-    def command =  ["sudo", "-u", postgres_user,
-                    psql_location | ("dropdb" + exec_postfix),
-                    '-U', postgres_user, transmart_db_name]
-    commandStep(command, false)
+    def command =  "drop database $transmart_db_name"
+    dbCommand(command, failOnError: false)
 
     //drop roles
-    def dropRoles = 'drop role biomart, biomart_user, deapp, i2b2demodata, ' +
+    command = 'reassign owned by biomart, biomart_user, deapp, ' +
+            'i2b2demodata, i2b2hive, i2b2metadata, i2b2pm, i2b2workdata, ' +
+            "searchapp to $postgres_user;"
+    dbCommand(command, failOnError: false)
+    command = 'drop role biomart, biomart_user, deapp, i2b2demodata, ' +
             'i2b2hive, i2b2metadata, i2b2pm, i2b2workdata, searchapp;'
-    dbCommand(dropRoles, postgres_user, working_db, false)
+    dbCommand(command, failOnError: false)
 
     //remove <user_home>/.grails/transmartConfig files:
     delete(dir: transmartuser_home | ".grails/transmartConfig")
@@ -202,14 +221,14 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
           * which have to be dropped at this point */
         def drops = "drop schema biomart, deapp, searchapp, i2b2demodata, " +
                 "i2b2hive, i2b2metadata, i2b2pm, i2b2workdata cascade;"
-        dbCommand(drops, postgres_user, transmart_db_name, true)
+        dbCommand(drops)
 
-        command =  ["sudo", "-u", postgres_user,
-                psql_location + '/pg_restore',
+        command =  [psql_location + '/pg_restore', '-u', postgres_user,
                 '-d', transmart_db_name, file.getPath()]
         commandStep(command, true, build_dir)
     } catch (e) {
-        println "Could not download or import dump file; reverting to SQL scripts"
+        println "Could not download or import dump file; reverting to SQL " +
+                "scripts (${e.message})"
         dbScriptStep(build_dir |
                 "transmartApp-DB/postgresql/create-main.sql",
                 postgres_user, transmart_db_name, true, true,
@@ -676,10 +695,13 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, ti
 
     def outputThread = null
     if (!quiet) {
-        outputThread = tailThread(new File(output))
+        outputThread = tailThread(output instanceof File
+                                  ? output
+                                  : new File(output))
         outputThread.start()
     }
 
+    def ant = new AntBuilder()
     try {
         def executable = command.get(0)
         //remove executable from list:
@@ -688,18 +710,18 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, ti
         println("Executing " + executable + " " +
                 command.collect { "'$it'" }.join(" ") )
 
-        def ant = new AntBuilder()   // create an antbuilder
-            ant.exec(dir: dir,
-                    failonerror: failOnError,
-                    inputstring: inputString,
-                    output: output,
-                    timeout: timeout,
-                    executable: executable)
-                    {
-                        command.each {
-                            arg(value: it)
-                        }
+        ant.exec(dir: dir,
+                failonerror: failOnError,
+                inputstring: inputString,
+                output: output,
+                timeout: timeout,
+                resultProperty: "cmdExit",
+                executable: executable)
+                {
+                    command.each {
+                        arg(value: it)
                     }
+                }
 
     }
     catch(Exception e)
@@ -712,6 +734,7 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, ti
         outputThread?.interrupt()
     }
 
+    ant.project.properties.cmdExit == "0" ? true : false
 }
 
 def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
@@ -748,12 +771,16 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 }
 
 
-def dbCommand(sqlCommand, user, databaseName, failOnError)
+def dbCommand(Map map, sqlCommand)
 {
-    println "About to execute SQL command $sqlCommand"
+    def user = map.user ?: postgres_user
+    def databaseName = map.database ?: working_db
+    def failOnError = map.failOnError == null ? true : map.failOnError
 
-    def command =  ["sudo", "-u", user, tools_psql_cmd, '-U', user,
-            "-d", databaseName, '-c', sqlCommand]
+    def command = [tools_psql_cmd, '-U', user, "-d", databaseName, '-c', sqlCommand]
+    if (psql_sudo_user) {
+        command = ['sudo', '-u', user, *command]
+    }
     commandStep(command, failOnError)
 }
 
@@ -762,7 +789,10 @@ def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=tru
 {
     println "About to execute SQL script $scriptFileName"
 
-    def command =  ["sudo", "-u", user, tools_psql_cmd, '-U', user, "-f", scriptFileName]
+    def command =  [tools_psql_cmd, '-U', user, "-f", scriptFileName]
+    if (psql_sudo_user) {
+        command = ['sudo', '-u', user, *command]
+    }
     //checkout specified branch :
     if (databaseName)
     {
