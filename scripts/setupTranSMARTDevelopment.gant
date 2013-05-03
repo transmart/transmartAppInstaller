@@ -46,6 +46,16 @@ def properties = readProperties("setupTranSMARTDevelopment.properties")
 properties.getAt = { delegate.getProperty(it) }
 
 String.metaClass.or = { String s -> new File(delegate, s).path }
+String.metaClass.compareVersion = { String s ->
+    def arrs = [delegate, s].collect { it.split(/\./) as List }
+    while (arrs.any()) {
+        def cur = arrs*.getAt(0).collect { it ?: 0 } as int[]
+        def r = cur[0] <=> cur[1]
+        if (r) return r
+        arrs = arrs*.drop(1)
+    }
+    return 0
+}
 File.metaClass.or = { String s -> new File(delegate, s).path }
 
 tools_git_cmd                    = properties["tools.git.cmd"]
@@ -87,10 +97,12 @@ else {
     exec_postfix = ""
 }
 
+def result
+
 //Test whether we want to change user
 psql_sudo_user = null
 if (host_os_type == 'unix') {
-    def result = commandStep([tools_psql_cmd, "-U", postgres_user, "-d",
+    result = commandStep([tools_psql_cmd, "-U", postgres_user, "-d",
             working_db, '-c', 'select 1'], false)
     if (!result) {
         result = commandStep(['sudo', '-u', postgres_user, tools_psql_cmd,
@@ -103,6 +115,16 @@ if (host_os_type == 'unix') {
         }
     }
 }
+
+//Test whether we have git --single-branch
+git_has_single_branch = false
+try {
+    result = ([tools_git_cmd, '--version'].execute().text =~ /(?:\d+\.)+\d+/)[0]
+    git_has_single_branch = result.compareVersion('1.7.10') >= 0
+} catch {
+    System.err.println("Could not determine git version; assuming it does not support --single-branch")
+}
+
 
 target('default': "cleanup and setup") {
     clean()
@@ -748,7 +770,9 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
         //checkout specified branch :
         if (branch)
         {
-            command.add('--single-branch')
+            if (git_has_single_branch)
+                command.add('--single-branch')
+
             command.add("-b")
             command.add(branch)
         }
@@ -915,3 +939,4 @@ def getTempDir()
 {
     System.getProperty("java.io.tmpdir")
 }
+/* vim: set ts=4 sw=4 tw=120 et filetype=groovy :*/
