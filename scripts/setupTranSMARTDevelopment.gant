@@ -61,7 +61,7 @@ File.metaClass.or = { String s -> new File(delegate, s).path }
 tools_git_cmd                    = properties["tools.git.cmd"]
 tools_psql_cmd                   = properties["tools.psql.cmd"]
 tools_ant_cmd                    = properties["tools.ant.cmd"]
-tools_grails_cmd                 = properties["tools.grails.cmd"]
+tools_grails_cmd                 = properties["tools.grails.cmd"] // optional, only needed to run buildAndInstallRDCmodule
 locations_jboss                  = properties["locations.jboss"] //leave empty in order not to setup i2b2 runtime
 
 ports_jboss                      = properties["ports.jboss"] //TODO jboss port can be read from ${locations_jboss}/server/default/deploy/jboss-web.deployer/server.xml
@@ -205,7 +205,8 @@ target(configSteps: "final configuration steps")
 {
     configTransmartApp()
 
-    buildAndInstallRDCmodule()
+    // If you want the script to download and compile Rmodules, then uncomment out the following line:
+    // buildAndInstallRDCmodule()
 }
 
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
