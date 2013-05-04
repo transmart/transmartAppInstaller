@@ -1,6 +1,6 @@
 transmartAppInstaller meant for  tranSMART - translational medicine data mart
 
-Author : pieter lukasse
+Author : Pieter Lukasse  (pieter at thehyve.nl)
 
 About transmartAppInstaller
 
@@ -16,16 +16,17 @@ Open source components contained therein may have different (but generally compa
 
 =======================================================================================================
 
-HOW TO USE THIS SOFTWARE
+HOW TO USE THIS SCRIPT
 
 =======================================================================================================
 
-You can start the installation script on the command line:
+ * Install a JDK (6.0 or 7.0 should work) and set JAVA_HOME
  * Install Git, PostgreSQL, Ant, Grails and JBoss with i2b2 (http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000)
  * Configure PostgreSQL such that you can login as the 'postgres' user using psql command line (e.g. via pg_hba.conf)
  * Go to the 'scripts' folder
- * Fill in setupTranSMARTDevelopment.properties (possibly by copying the Linux or Mac OSX templates in the folder)
+ * Fill in setupTranSMARTDevelopment.properties (possibly by copying the Linux, Mac OSX or Windows templates in the folder)
  * Run startup.bat or ./startup.sh (caution: this will run clean, so only do this when you have no tranSMART configuration yet)
 
-This will set you up with the neccessary database schemas, patch i2b2 so that it runs on Postgres and create configuration files.
+This will set you up with the neccessary database schemas, patch i2b2 so that it runs on Postgres and create the tranSMART configuration files.
 You will still have to checkout and run transmartApp itself and run JBoss with i2b2 in order to actually get a working tranSMART application.
+Note: if you use the core-integration branch of tranSMART, you do not need JBoss with i2b2.
