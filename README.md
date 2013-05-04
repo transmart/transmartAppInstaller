@@ -1,8 +1,7 @@
 transmartAppInstaller meant for  tranSMART - translational medicine data mart
-
 Author : Pieter Lukasse  (pieter at thehyve.nl)
 
-About transmartAppInstaller
+## About transmartAppInstaller
 
 transmartAppInstaller is an installation script that sets up some dependencies for running Postgres-based
 branches of transmartApp. This includes the tranSMART Postgres database schemas and example content,
@@ -15,11 +14,7 @@ This software is licensed under the Apache License 2.0.
 Open source components contained therein may have different (but generally compatible) licenses like Apache License 1.1.
 
 
-=======================================================================================================
-
-HOW TO USE THIS SCRIPT
-
-=======================================================================================================
+## Instructions for use
 
  * Install a JDK (6.0 or 7.0 should work) and set JAVA_HOME
  * Install Git, PostgreSQL, Ant, Grails
