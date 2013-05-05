@@ -121,7 +121,7 @@ git_has_single_branch = false
 try {
     result = ([tools_git_cmd, '--version'].execute().text =~ /(?:\d+\.)+\d+/)[0]
     git_has_single_branch = result.compareVersion('1.7.10') >= 0
-} catch {
+} catch(e) {
     System.err.println("Could not determine git version; assuming it does not support --single-branch")
 }
 

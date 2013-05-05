@@ -1,9 +1,13 @@
+#use full paths!
 tools.git.cmd="C:/Program Files/Git/bin/git.exe"
 tools.psql.cmd=D:/installations/PostgreSQL/9.2/bin/psql.exe
 tools.ant.cmd=D:/installations/apache-ant-1.8.4/bin/ant.bat
+
+#Grails is optional, not needed for the default installation target
 tools.grails.cmd="C:/Program Files/grails-2.0.4/bin/grails.bat"
 
 # use preconfigured JBoss 4.2.2.GA (see http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000 )
+# leave this empty if you don't want to install i2b2 (core integration branch)
 locations.jboss=D:/installations/jboss-4.2.2.GA/jboss-4.2.2.GA
 
 # tomcat 5, 6, or 7
