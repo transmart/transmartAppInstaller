@@ -248,7 +248,7 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
           * which have to be dropped at this point */
         def drops = "drop schema if exists biomart, deapp, searchapp, i2b2demodata, " +
                 "i2b2hive, i2b2metadata, i2b2pm, i2b2workdata cascade;"
-        dbCommand(drops)
+        dbCommand(drops, database: transmart_db_name)
 
         command =  maybeSudoize([psql_location | 'pg_restore', '-U', postgres_user,
                 '-d', transmart_db_name, file.getPath()])
