@@ -142,9 +142,11 @@ target(clean: "clean-up to run again...")
             'i2b2demodata, i2b2hive, i2b2metadata, i2b2pm, i2b2workdata, ' +
             "searchapp to $postgres_user;"
     dbCommand(command, failOnError: false)
-    command = 'drop role biomart, biomart_user, deapp, i2b2demodata, ' +
-            'i2b2hive, i2b2metadata, i2b2pm, i2b2workdata, searchapp;'
-    dbCommand(command, failOnError: false)
+    roles = ['biomart', 'biomart_user', 'deapp', 'i2b2demodata', 'i2b2hive',
+            'i2b2metadata', 'i2b2pm', 'i2b2workdata', 'searchapp'];
+    roles.each {
+        dbCommand("drop role $it", failOnError: false, quiet: true)
+    }
 
     //remove <user_home>/.grails/transmartConfig files:
     delete(dir: transmartuser_home | ".grails/transmartConfig")
@@ -245,7 +247,7 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
                 "i2b2hive, i2b2metadata, i2b2pm, i2b2workdata cascade;"
         dbCommand(drops)
 
-        command =  maybeSudoize([psql_location + '/pg_restore', '-u', postgres_user,
+        command =  maybeSudoize([psql_location | 'pg_restore', '-u', postgres_user,
                 '-d', transmart_db_name, file.getPath()])
         commandStep(command, true, build_dir)
     } catch (e) {
@@ -705,6 +707,16 @@ Thread tailThread(File file) {
     } as Runnable)
 }
 
+def commandStepN(Map args = [:], command)
+{
+    def failOnError = args.failOnError == null ? true : args.failOnError
+    def dir         = args.dir ?: '.'
+    def inputString = args.inputString
+    def quiet       = args.quiet == null ? false : args.quiet
+    def timeout     = args.timeout == null ? 600000 : args.timeout
+
+    commandStep(command, failOnError, dir, inputString, quiet, timeout, output)
+}
 def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, timeout = 600000, output=ant_last_step_output)
 {
     // Uncomment this for an interactive mode:
@@ -803,10 +815,9 @@ def dbCommand(Map map = [:], sqlCommand)
 {
     def user = map.user ?: postgres_user
     def databaseName = map.database ?: working_db
-    def failOnError = map.failOnError == null ? true : map.failOnError
 
     def command = [tools_psql_cmd, '-U', user, "-d", databaseName, '-c', sqlCommand]
-    commandStep(maybeSudoize(user: user, command), failOnError)
+    commandStepN(map, maybeSudoize(user: user, command))
 }
 
 //TODO : we can also add a parameter "host" and use -h host to execute the scripts on a remote DB...
