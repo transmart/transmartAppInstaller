@@ -744,6 +744,7 @@ def commandStepN(Map args = [:], command)
     def inputString = args.inputString
     def quiet       = args.quiet == null ? false : args.quiet
     def timeout     = args.timeout == null ? 600000 : args.timeout
+    def output      = args.output == null ? ant_last_step_output : args.output;
 
     commandStep(command, failOnError, dir, inputString, quiet, timeout, output)
 }
