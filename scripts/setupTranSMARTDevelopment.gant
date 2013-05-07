@@ -246,10 +246,10 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
           * which have to be dropped at this point */
         def drops = "drop schema biomart, deapp, searchapp, i2b2demodata, " +
                 "i2b2hive, i2b2metadata, i2b2pm, i2b2workdata cascade;"
-        dbCommand([:], drops)
+        dbCommand(drops)
 
-        command =  [psql_location + '/pg_restore', '-u', postgres_user,
-                '-d', transmart_db_name, file.getPath()]
+        command =  maybeSudoize([psql_location + '/pg_restore', '-u', postgres_user,
+                '-d', transmart_db_name, file.getPath()])
         commandStep(command, true, build_dir)
     } catch (e) {
         println "Could not download or import dump file; reverting to SQL " +
@@ -824,18 +824,19 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
     }
 }
 
-
-def dbCommand(Map map, sqlCommand)
+def maybeSudoize(Map map = [:], command)
+{
+    def user = map.user ?: postgres_user
+    psql_sudo_user ? ['sudo', '-u', user, *command] : command
+}
+def dbCommand(Map map = [:], sqlCommand)
 {
     def user = map.user ?: postgres_user
     def databaseName = map.database ?: working_db
     def failOnError = map.failOnError == null ? true : map.failOnError
 
     def command = [tools_psql_cmd, '-U', user, "-d", databaseName, '-c', sqlCommand]
-    if (psql_sudo_user) {
-        command = ['sudo', '-u', user, *command]
-    }
-    commandStep(command, failOnError)
+    commandStep(maybeSudoize(user: user, command), failOnError)
 }
 
 //TODO : we can also add a parameter "host" and use -h host to execute the scripts on a remote DB...
@@ -843,10 +844,8 @@ def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=tru
 {
     println "About to execute SQL script $scriptFileName"
 
-    def command =  [tools_psql_cmd, '-U', user, "-f", scriptFileName]
-    if (psql_sudo_user) {
-        command = ['sudo', '-u', user, *command]
-    }
+    def command =  maybeSudoize(user: user, [tools_psql_cmd, '-U', user, "-f", scriptFileName])
+
     //checkout specified branch :
     if (databaseName)
     {
