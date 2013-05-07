@@ -625,13 +625,13 @@ target(verifySEARCHAPPdata: "verify SEARCHAPP data")
     //dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/searchapp/data/check_counts.sql"), "biomart_user", transmart_db_name, true, false, ".", "biomart_user")
 
     FileReader reader = new FileReader(ant_last_step_output)
-    def lines = reader.readLines()
+    def counts = readCounts(reader.readLines())
 
     //verify some of the counts:
-    assertEquals(lines.get(2),"SEARCH_KEYWORD_TERM           | 105844")
-    assertEquals(lines.get(3),"SEARCH_KEYWORD                |  42114")
-    assertEquals(lines.get(4),"SEARCH_REQUEST_MAP            |     17")
-    assertEquals(lines.get(5),"PLUGIN_MODULE                 |     11")
+    assertEquals(counts,"SEARCH_KEYWORD_TERM",105844)
+    assertEquals(counts,"SEARCH_KEYWORD",42114)
+    assertEquals(counts,"SEARCH_REQUEST_MAP",17)
+    assertEquals(counts,"PLUGIN_MODULE",11)
 }
 
 
@@ -642,13 +642,13 @@ target(verifyDEAPPdata: "verify DEAPP data")
             postgres_user, transmart_db_name, true, false, ".")
 
     FileReader reader = new FileReader(ant_last_step_output)
-    def lines = reader.readLines()
+    def counts = readCounts(reader.readLines())
 
     //verify some of the counts:
-    assertEquals(lines.get(2),"DE_SUBJECT_MICROARRAY_DATA | 54400")
-    assertEquals(lines.get(3),"DE_MRNA_ANNOTATION         |  5440")
-    assertEquals(lines.get(4),"DE_SUBJECT_SAMPLE_MAPPING  |    10")
-    assertEquals(lines.get(5),"DE_SAVED_COMPARISON        |     5")
+    assertEquals(counts,"DE_SUBJECT_MICROARRAY_DATA",54400)
+    assertEquals(counts,"DE_MRNA_ANNOTATION",5440)
+    assertEquals(counts,"DE_SUBJECT_SAMPLE_MAPPING",10)
+    assertEquals(counts,"DE_SAVED_COMPARISON",5)
 }
 
 target(verifyBIOMARTdata: "verify DEAPP data")
@@ -658,25 +658,34 @@ target(verifyBIOMARTdata: "verify DEAPP data")
             postgres_user, transmart_db_name, true, false, ".")
 
     FileReader reader = new FileReader(ant_last_step_output)
-    def lines = reader.readLines()
+    def counts = readCounts(reader.readLines())
 
     //verify some of the counts:
-    assertEquals(lines.get(2),"BIO_ASSAY_FEATURE_GROUP     | 237002")
-    assertEquals(lines.get(3),"BIO_ASSAY_ANALYSIS_DATA     | 184538")
-    assertEquals(lines.get(4),"BIO_DATA_EXT_CODE           | 134965")
-    assertEquals(lines.get(5),"BIO_DATA_UID                | 126764")
+    assertEquals(counts,"BIO_ASSAY_FEATURE_GROUP",237002)
+    assertEquals(counts,"BIO_ASSAY_ANALYSIS_DATA",184538)
+    assertEquals(counts,"BIO_DATA_EXT_CODE",134965)
+    assertEquals(counts,"BIO_DATA_UID",126764)
 }
 
 
 //======================= UTILITY METHODS ==============================================================
 
-def assertEquals(value, reference)
+def readCounts(readLines)
 {
-    print("checking: " + value + " = " + reference + "...")
-    assert value.trim().equals(reference)
-    println("\t OK!")
+    def counts = [:]
+    readLines.each {
+        def matcher = it =~ /^\s*(\w*)\s*\|\s*(\d+)\s*$/
+        if (matcher) counts[matcher.group(1)] = matcher.group(2)
+    }
+    counts
 }
 
+def assertEquals(map,key,value)
+{
+    print("checking: ${key} | ${map[key]} = ${value} ...")
+    assert map[key].toString().equals(value.toString())
+    println("\t OK!")
+}
 
 Thread tailThread(File file) {
     def safeSize = {
