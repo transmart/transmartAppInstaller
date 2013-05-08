@@ -828,13 +828,13 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
             command.add("-b")
             command.add(branch)
         }
-        commandStep(command, failOnError, ".", null, false, 600000) //TODO show progress...perhaps by reading output in a separate thread...?
+        commandStep(command, failOnError, ".", null, false, 1800000) //TODO show progress...perhaps by reading output in a separate thread...?
     }
     else {
         /* maybe we should check whether the repository is dirty/deviated from origin & abort */
 
         def command = [tools_git_cmd, 'fetch', '-q', 'origin']
-        commandStep(command, failOnError, destDir, null, false, 600000)
+        commandStep(command, failOnError, destDir, null, false, 1800000)
 
         command = [tools_git_cmd, 'rev-parse', '--abbrev-ref', '--symbolic-full-name',  '@{u}']
         def proc = command.execute([], targetDir)
