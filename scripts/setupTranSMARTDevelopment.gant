@@ -284,7 +284,7 @@ target(buildAndInstallRDCmodule: "Building and installing the RDC module")
     commandStep(command, true, transmartRDCDir)
 
     //grails install-plugin grails-rdc-rmodules-0.2.zip
-    command =  ["${tools_grails_cmd}", "install-plugin grails-rdc-rmodules-0.2.zip"]
+    command =  ["${tools_grails_cmd}", "install-plugin", "grails-rdc-rmodules-0.2.zip"]
     commandStep(command, true, transmartRDCDir)
 }
 
@@ -503,7 +503,7 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
 //    ant -f master_build.xml clean build-all deploy
     replacePropertyInFile(coreserver_subdir | "edu.harvard.i2b2.pm/build.properties",
             "jboss.home", locations_jboss)
-    command =  ["${tools_ant_cmd}", '-f master_build.xml', 'clean', 'build-all', 'deploy']
+    command =  ["${tools_ant_cmd}", '-f', 'master_build.xml', 'clean', 'build-all', 'deploy']
     commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.pm")
 //
 //    ./edu.harvard.i2b2.ontology/build.properties
@@ -521,7 +521,7 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
     replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.ontology/etc/spring/ontology_application_directory.properties",
             "edu.harvard.i2b2.ontology.applicationdir", locations_jboss + "/server/default/conf/ontologyapp")
 //    ant -f master_build.xml clean build-all deploy
-    command =  ["${tools_ant_cmd}", '-f master_build.xml', 'clean', 'build-all', 'deploy']
+    command =  ["${tools_ant_cmd}", '-f', 'master_build.xml', 'clean', 'build-all', 'deploy']
     commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.ontology")
 //
 //    ./edu.harvard.i2b2.crc.loader/build.properties
@@ -534,7 +534,7 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
     replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crc.loader/etc/spring/crc_loader_application_directory.properties",
             "edu.harvard.i2b2.crc.loader.applicationdir", locations_jboss + "/server/default/conf/crcapp")
 //    ant -f build.xml clean dist
-    command =  ["${tools_ant_cmd}", '-f build.xml', 'clean', 'dist']
+    command =  ["${tools_ant_cmd}", '-f', 'build.xml', 'clean', 'dist']
     commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.crc.loader")
 //
 //    ./edu.harvard.i2b2.crcplugin.patientcount/build.properties
@@ -561,7 +561,7 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
     replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crc/etc/spring/crc_application_directory.properties",
             "edu.harvard.i2b2.crc.applicationdir", locations_jboss + "/server/default/conf/crcloaderapp")
 //    ant -f master_build.xml clean build-all deploy
-    command =  ["${tools_ant_cmd}", '-f master_build.xml', 'clean', 'build-all', 'deploy']
+    command =  ["${tools_ant_cmd}", '-f', 'master_build.xml', 'clean', 'build-all', 'deploy']
     commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.crc")
 //
 //    ./edu.harvard.i2b2.workplace/build.properties
@@ -574,7 +574,7 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
     replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.workplace/etc/spring/workplace_application_directory.properties",
             "edu.harvard.i2b2.workplace.applicationdir", locations_jboss + "/server/default/conf/workplaceapp")
 //    ant -f master_build.xml clean build-all deploy
-    command =  ["${tools_ant_cmd}", '-f master_build.xml', 'clean', 'build-all', 'deploy']
+    command =  ["${tools_ant_cmd}", '-f', 'master_build.xml', 'clean', 'build-all', 'deploy']
     commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.workplace")
 //
 //
@@ -588,7 +588,7 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
     replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.fr/etc/spring/fr_application_directory.properties",
             "edu.harvard.i2b2.fr.applicationdir", locations_jboss + "/server/default/conf/frapp")
 //    ant -f master_build.xml clean build-all deploy
-    command =  ["${tools_ant_cmd}", '-f master_build.xml', 'clean', 'build-all', 'deploy']
+    command =  ["${tools_ant_cmd}", '-f', 'master_build.xml', 'clean', 'build-all', 'deploy']
     commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.fr")
 }
 
