@@ -27,20 +27,15 @@ import org.apache.tools.ant.taskdefs.Ant
  *
  *  - git
  *  - psql (postgres sql )
- *  - pre-configured jboss ( JBoss 4.2.2.GA see http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000)
  *  - a properly configured setupTranSMARTDevelopment.properties
- *
- * NB: for running in IntelliJ/Grails: make sure you do NOT have ant jar files in the /lib folder...these will conflict with Grails .jars
+ *  - (optional) pre-configured jboss (JBoss 4.2.2.GA see
+ *    http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz )
  *
  * @author : pieter lukasse (pieter@thehyve.nl)
  */
 
-//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//note: make sure your GRAILS is 2.0.4 or higher...
-//tested with version 2.0.4
-//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-def ant = new AntBuilder();
+info = this.&echo.curry('info')
+warn = this.&echo.curry('warning')
 
 def properties = readProperties("setupTranSMARTDevelopment.properties")
 properties.getAt = { delegate.getProperty(it) }
@@ -61,9 +56,8 @@ File.metaClass.or = { String s -> new File(delegate, s).path }
 tools_git_cmd                    = properties["tools.git.cmd"]
 tools_psql_cmd                   = properties["tools.psql.cmd"]
 tools_ant_cmd                    = properties["tools.ant.cmd"]
-tools_grails_cmd                 = properties["tools.grails.cmd"] // optional, only needed to run buildAndInstallRDCmodule
-locations_jboss                  = properties["locations.jboss"] //leave empty in order not to setup i2b2 runtime
 
+locations_jboss                  = properties["locations.jboss"] //leave empty in order not to setup i2b2 runtime
 ports_jboss                      = properties["ports.jboss"] //TODO jboss port can be read from ${locations_jboss}/server/default/deploy/jboss-web.deployer/server.xml
 ports_solr                       = properties["ports.solr"]
 
@@ -71,89 +65,182 @@ locations_tomcat                 = properties["locations.tomcat"]
 locations_plink_exec             = properties["locations.plink.executables"]
 
 build_dir                        = properties["locations.build.out"]
-transmart_db_name                = "transmart"  //better keep it with this value for now...script does not deal with other names for now  (e.g. still a problem in - a. Create the transmart database (can use script transmart-db.sql))
+transmart_db_name                = "transmart"  //untested with other names
 transmart_db_tablespace_location = properties["locations.db.tablespaces"]
 transmartuser_home               = properties["locations.transmartuser.home"]
 
-postgres_user                    = properties['postgres.user'] // database user
-working_db                       = properties['postgres.workingdb']
+pg_user                          = properties['postgres.user'] // database user
+pg_password                      = properties['postgres.password']
+pg_database                      = properties['postgres.workingdb']
+pg_host                          = properties['postgres.host']
+pg_port                          = properties['postgres.port']
 
 webapps_subdir                   = 'applications'
 webapps_data                     = 'appdata'
 
 //some handy derived globals:
 ant_last_step_output             = new File(getTempDir(), "ant_last_step_out.txt")
-psql_location                    = new File(tools_psql_cmd).parent
 
-if (System.properties['os.name'].toLowerCase().contains('windows'))
-    host_os_type = "windows"
-else
-    host_os_type = "unix"
-
-if (host_os_type == "windows") {
-    exec_postfix = ".exe"
-}
-else {
-    exec_postfix = ""
-}
-
-def result
-
-//Test whether we want to change user
+/*  Set in validate: */
+host_os_type = null
+exec_postfix = null
+git_has_single_version = null
 psql_sudo_user = null
-if (host_os_type == 'unix') {
-    result = commandStep([tools_psql_cmd, "-U", postgres_user, "-d",
-            working_db, '-c', 'select 1'], false)
-    if (!result) {
-        result = commandStep(['sudo', '-u', postgres_user, tools_psql_cmd,
-                "-U", postgres_user, "-d", working_db, '-c', 'select 1'], false)
-        if (result) {
+pg_effective_user = null
+
+validateEnvironment()
+
+def validateEnvironment() {
+    def result
+
+    /* System idiosyncrasies */
+    if (System.properties['os.name'].toLowerCase().contains('windows'))
+        host_os_type = "windows"
+    else
+        host_os_type = "unix"
+
+    exec_postfix = host_os_type == "windows" ? '.exe' : ''
+
+    /* {{{ Git */
+    tools_git_cmd = tools_git_cmd ?: which('git')
+    if (!tools_git_cmd) {
+        fail 'Git executable location not specified'
+    }
+    if (!new File(tools_git_cmd).canExecute()) {
+        fail 'Git location "%s" is invalid', tools_git_cmd
+    }
+
+    try {
+        result = ([tools_git_cmd, '--version'].execute().text =~ /(?:\d+\.)+\d+/)[0]
+        git_has_single_branch = result.compareVersion('1.7.10') >= 0
+        if (!git_has_single_branch) {
+            warn 'Your version of git does not support --single-branch; ' +
+                    'checkout times will be longer'
+        }
+    } catch (e) {
+        fail 'Could not determine git version: %s', e.message
+    }
+    /* }}} */
+
+    /* {{{ psql */
+    tools_psql_cmd = tools_psql_cmd ?: which('psql')
+    if (!tools_psql_cmd) {
+        fail 'psql executable location not specified'
+    }
+    if (!new File(tools_psql_cmd).canExecute()) {
+        fail 'psql location "%s" is invalid', tools_psql_cmd
+    }
+
+    if (!pg_database && !System.getenv('PGDATABASE')) {
+        pg_database = pg_user ?: System. getProperty("user.name")
+        warn 'postgres.workingdb was not specified, trying "%s"', pg_database
+    }
+
+    // Test whether we want to change user
+    psql_sudo_user = null
+    if (host_os_type == 'unix') {
+        result = executePsql(['-t', '-c', 'select 1'], failOnError: false)
+
+        if (!result) {
+            if (!pg_user) {
+                warn "Not trying sudo because no db user was specified"
+                fail "Failed connecting to the database. Check your settings;" +
+                        " see README for more information"
+            }
+
+            warn "Failed connecting to the database. Trying now with sudo"
             psql_sudo_user = true
-        } else {
-            System.err.println("Could not connect to the database. Check settings")
-            System.exit(1)
+            result = executePsql(['-t', '-c', 'select 2'], failOnError: false)
+
+            if (!result) {
+                info "Could not connect to the database. Check your settings;" +
+                        " see README for more information"
+                fail "Abort"
+            }
         }
     }
-}
+    result = executePsql(['-t', '-c', 'select rolsuper, current_user from ' +
+            'pg_authid where rolname = current_user'], failOnError: false)
+    if (!result) {
+        fail "Could not execute postgresql superuser probe. Check your settings"
+    }
+    def output = ant_last_step_output.text.split(/\|/)*.trim() as List
+    if (output[0] != "t") {
+        fail "The user we're connecting as, '%s', is not a DB super user",
+                output[1]
+    }
+    pg_effective_user = output[1]
+    /* }}} */
 
-//Test whether we have git --single-branch
-git_has_single_branch = false
-try {
-    result = ([tools_git_cmd, '--version'].execute().text =~ /(?:\d+\.)+\d+/)[0]
-    git_has_single_branch = result.compareVersion('1.7.10') >= 0
-} catch(e) {
-    System.err.println("Could not determine git version; assuming it does not support --single-branch")
-}
+    /* {{{ Ant */
+    if (!tools_cmd_ant) {
+        if (host_os_type == 'unix') {
+            def thisFile = binding.'gant.file'.substring('file:'.length())
+            tools_ant_cmd = new File(thisFile).parent | 'ant'
+        } else {
+            fail 'Ant location not specified. Check tools.ant.cmd'
+        }
+    }
+    if (!new File(tools_ant_cmd).canExecute()) {
+        fail 'Ant location "%s" is invalid', tools_ant_cmd
+    }
+    result = commandStepN([tools_ant_cmd, "-version"], failOnError: false)
+    if (!result) {
+        fail "Failed on invocation of ant -version"
+    }
+    /* }}} */
 
+    /* {{{ Validation of directories */
+    def dirValidation = { settingName, directory ->
+        info "Checking directory %s...", directory
+        if (!directory) {
+            fail "%s is not set", settingName
+        }
+        if (!new File(directory).exists()) {
+            warn "Directory %s does not exist; trying to create...", directory
+            ant.mkdir(dir: directory)
+        } else if (!new File(directory).canWrite()) {
+            fail "No write permissions in %s, check %s", directory, settingName
+        }
+    }
+    dirValidation "locations.build.out",          build_dir
+    dirValidation "locations.db.tablespace",      transmart_db_tablespace_location
+    dirValidation "locations.transmartuser.home", transmartuser_home
+
+    info "Everything validated, let's start"
+}
 
 target('default': "cleanup and setup") {
     clean()
     install()
 }
 
+target(cleanBuildDir: 'delete build dir contents')
+{
+    /* This target must be invoked explicitly */
+    delete(verbose: true, includeemptydirs: true) {
+        fileset dir: build_dir, includes: '**/*', defaultexcludes: false
+    }
+}
+
 target(clean: "clean-up to run again...")
 {
     //drop postgres "transmart" db:
-    def command =  "drop database $transmart_db_name"
-    dbCommand(command, failOnError: false)
+    def command =  "drop database if exists $transmart_db_name"
+    dbCommand(command, failOnError: true)
 
     //drop roles
-    command = 'reassign owned by biomart, biomart_user, deapp, ' +
-            'i2b2demodata, i2b2hive, i2b2metadata, i2b2pm, i2b2workdata, ' +
-            "searchapp to $postgres_user;"
-    dbCommand(command, failOnError: false)
     roles = ['biomart', 'biomart_user', 'deapp', 'i2b2demodata', 'i2b2hive',
-            'i2b2metadata', 'i2b2pm', 'i2b2workdata', 'searchapp'];
+            'i2b2metadata', 'i2b2pm', 'i2b2workdata', 'searchapp', 'tm_cz',
+            'tm_lz', 'tm_wz'];
+    command = "reassign owned by ${roles.join(', ')} to $pg_effective_user;"
+    dbCommand(command, failOnError: false)
     roles.each {
         dbCommand("drop role $it", failOnError: false, quiet: true)
     }
 
     //remove <user_home>/.grails/transmartConfig files:
     delete(dir: transmartuser_home | ".grails/transmartConfig")
-
-    //remove all git checkouts:
-    delete(dir: build_dir)
-
 }
 
 target(install: "The installation script") {
@@ -206,13 +293,14 @@ target(install: "The installation script") {
 target(configSteps: "final configuration steps")
 {
     configTransmartApp()
-
-    // If you want the script to download and compile Rmodules, then uncomment out the following line:
-    // buildAndInstallRDCmodule()
 }
 
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
 {
+    /* create dump: stop after verifyTransmartDB and run:
+     * pg_dump -c -F c gustavo -f \
+     *  dump_`git ls-remote git://github.com/transmart/transmartApp-DB.git -b postgresMigrate | head -c 7`_db
+     */
     /* See if we have a dump for this version of transmartApp-DB */
     def dir = build_dir | "transmartApp-DB" | '.git'
     //content: 'ref: refs/heads/postgresql-branch'
@@ -223,7 +311,6 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
     def file = new File(build_dir, filename)
     def url = new URL("http://files.thehyve.net/$filename")
     def out = new BufferedOutputStream(new FileOutputStream(file))
-    def command
 
     try {
         out << url.openStream()
@@ -238,9 +325,10 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
                 'biomart/prerequisites.sql',
                 'deapp/prerequisites.sql',
                 'i2b2_prerequisites.sql',
+                'bmuser_search_path.sql',
         ].each {
             dbScriptStep(build_dir | "transmartApp-DB/postgresql" | it,
-                    postgres_user, transmart_db_name, true, true,
+                    transmart_db_name, true, true,
                     build_dir | "transmartApp-DB/postgresql", false)
         }
 
@@ -250,15 +338,18 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
                 "i2b2hive, i2b2metadata, i2b2pm, i2b2workdata cascade;"
         dbCommand(drops, database: transmart_db_name)
 
-        command =  maybeSudoize([psql_location | 'pg_restore', '-U', postgres_user,
-                '-d', transmart_db_name, file.getPath()])
-        commandStep(command, true, build_dir)
+        executePsql(
+                dir: build_dir,
+                database: transmart_db_name,
+                [file.getPath()],
+                new File(tools_psql_cmd).parent.toString() | 'pg_restore' + exec_postfix
+        )
     } catch (e) {
-        println "Could not download or import dump file; reverting to SQL " +
+        warn "Could not download or import dump file; reverting to SQL " +
                 "scripts (${e.message})"
         dbScriptStep(build_dir |
                 "transmartApp-DB/postgresql/create-main.sql",
-                postgres_user, transmart_db_name, true, true,
+                transmart_db_name, true, true,
                 build_dir | "transmartApp-DB/postgresql", false)
     }
 }
@@ -271,21 +362,6 @@ target(verifyTransmartDB: "verify transmartDB data is OK")
     verifyDEAPPdata()
 //  Verify BIOMART table row counts using biomart/data/check_counts.sql.
     verifyBIOMARTdata()
-}
-
-target(buildAndInstallRDCmodule: "Building and installing the RDC module")
-{
-    //git clone https://github.com/transmart/Rmodules.git   -b postgresMigrate
-    def transmartRDCDir = build_dir | "transmart_Rmodules"
-    gitStep("git://github.com/transmart/Rmodules.git", transmartRDCDir, "master")
-
-    //grails package-plugin
-    def command =  ["${tools_grails_cmd}", "package-plugin"]
-    commandStep(command, true, transmartRDCDir)
-
-    //grails install-plugin grails-rdc-rmodules-0.2.zip
-    command =  ["${tools_grails_cmd}", "install-plugin grails-rdc-rmodules-0.2.zip"]
-    commandStep(command, true, transmartRDCDir)
 }
 
 target(downloadI2B2: "Downloading and installing i2b2 version of tranSMART 1.0 GA")
@@ -421,15 +497,15 @@ target(executePostI2b2Scripts: "the POST I2b2 Import Scripts")
 //     c. psql -h localhost -U postgres -d transmart -f post-i2b2.sql --quiet
 
      dbScriptStep(build_dir | "transmartApp-DB/postgresql/i2b2-grants.sql",
-             postgres_user, transmart_db_name, true, true,
+             transmart_db_name, true, true,
              build_dir | "transmartApp-DB/postgresql")
 
      dbScriptStep(build_dir | "transmartApp-DB/postgresql/etl/start.sql",
-             postgres_user, transmart_db_name, true, true,
+             transmart_db_name, true, true,
              build_dir | "transmartApp-DB/postgresql")
 
      dbScriptStep(build_dir | "transmartApp-DB/postgresql/post-i2b2.sql",
-             postgres_user, transmart_db_name, true, true,
+             transmart_db_name, true, true,
              build_dir | "transmartApp-DB/postgresql")
  }
 
@@ -437,7 +513,7 @@ target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
 {
     //    a. Execute the i2b2_prerequisites.sql script
     dbScriptStep(build_dir | "transmartApp-DB/postgresql/i2b2_prerequisites.sql",
-            postgres_user, transmart_db_name, true, true)
+            transmart_db_name, true, true)
 
 //    Download i2b2 upgrades and data loading for PostgreSQL upgrade - github/transmart/i2b2_1.6_postgres
 //    Use master branch
@@ -594,10 +670,11 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
 
 target(createTransmartDB: "createTransmartDB")
 {
-    def f = File.createTempFile("createdb", ".sql")
-    f << "CREATE DATABASE $transmart_db_name WITH OWNER = $postgres_user TEMPLATE template0"
+    def command = "CREATE DATABASE $transmart_db_name " +
+            "WITH OWNER = $pg_effective_user TEMPLATE template0 " +
+            "ENCODING='UTF-8' LC_COLLATE='en_US.UTF-8'"
 
-    dbScriptStep(f.absolutePath, postgres_user, working_db, false, true)
+    dbCommand([:], command)
 }
 
 target(ensureTablespaces: "createTablespaces")
@@ -608,7 +685,15 @@ target(ensureTablespaces: "createTablespaces")
         def db_dir = transmart_db_tablespace_location | it;
 
         mkdir(dir: db_dir);
-        chown(owner: 'postgres', type: 'dir', file: db_dir)
+        /* this requires root permissions and assumes postgresql runs under
+         * postgres. Let's make it world-writable with the sticky bit set,
+         * which is OK for dev purposes */
+        //chown(owner: 'postgres', type: 'dir', file: db_dir)
+        if (host_os_type != "windows") {
+            chmod(dir: db_dir, perm: "1777")
+        } else {
+            warn "Make sure postgresql can write in %s", db_dir
+        }
     }
     fixTablespaceLocation(build_dir | "transmartApp-DB/postgresql/tablespaces.sql")
     //nb: no need to execute this script here...just fixing it...this is a prep for a later step
@@ -618,11 +703,7 @@ target(verifySEARCHAPPdata: "verify SEARCHAPP data")
 {
     dbScriptStep(build_dir |
             "transmartApp-DB/postgresql/searchapp/data/check_counts.sql",
-            postgres_user, transmart_db_name, true, false, ".")
-
-    //TODO - below should work but is hanging as ant.exec does not seem to be passing the given inputstring to the stdin...so process is hanging waiting for biomart_user's password.
-    //TODO (CONT) -       So find out why ant is failing here and how to fix it...looked at various sites but could not find an answer or similar case...
-    //dbScriptStep(getDirPath(build_dir, "transmartApp-DB/postgresql/searchapp/data/check_counts.sql"), "biomart_user", transmart_db_name, true, false, ".", "biomart_user")
+            transmart_db_name, true, false, ".")
 
     FileReader reader = new FileReader(ant_last_step_output)
     def counts = readCounts(reader.readLines())
@@ -639,7 +720,7 @@ target(verifyDEAPPdata: "verify DEAPP data")
 {
     dbScriptStep(build_dir |
             "transmartApp-DB/postgresql/deapp/data/check_counts.sql",
-            postgres_user, transmart_db_name, true, false, ".")
+            transmart_db_name, true, false, ".")
 
     FileReader reader = new FileReader(ant_last_step_output)
     def counts = readCounts(reader.readLines())
@@ -655,7 +736,7 @@ target(verifyBIOMARTdata: "verify DEAPP data")
 {
     dbScriptStep(build_dir |
             "transmartApp-DB/postgresql/biomart/data/check_counts.sql",
-            postgres_user, transmart_db_name, true, false, ".")
+            transmart_db_name, true, false, ".")
 
     FileReader reader = new FileReader(ant_last_step_output)
     def counts = readCounts(reader.readLines())
@@ -682,9 +763,8 @@ def readCounts(readLines)
 
 def assertEquals(map,key,value)
 {
-    print("checking: ${key} | ${map[key]} = ${value} ...")
+    info "checking: ${key} | ${map[key]} = ${value} ..."
     assert map[key].toString().equals(value.toString())
-    println("\t OK!")
 }
 
 Thread tailThread(File file) {
@@ -754,10 +834,13 @@ def commandStepN(Map args = [:], command)
     def quiet       = args.quiet == null ? false : args.quiet
     def timeout     = args.timeout == null ? 600000 : args.timeout
     def output      = args.output == null ? ant_last_step_output : args.output;
+    def environment = args.environment ?: [:]
 
-    commandStep(command, failOnError, dir, inputString, quiet, timeout, output)
+    commandStep(command, failOnError, dir, inputString, quiet, timeout,
+            output, environment)
 }
-def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, timeout = 600000, output=ant_last_step_output)
+def commandStep(command, failOnError, dir=".", inputString=null, quiet=false,
+                timeout = 600000, output=ant_last_step_output, environment=[:])
 {
     // Uncomment this for an interactive mode:
     //println "About to execute $command on dir ${dir ? dir : 'CWD' }..."
@@ -781,8 +864,7 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, ti
         //remove executable from list:
         command.remove(0)
 
-        println("Executing " + executable + " " +
-                command.collect { "'$it'" }.join(" ") )
+        info "Executing %s %s", executable, command.collect { "'$it'" }.join(" ")
 
         ant.exec(dir: dir,
                 failonerror: failOnError,
@@ -795,16 +877,14 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, ti
                     command.each {
                         arg(value: it)
                     }
+                    environment.each { k, v ->
+                        env(key: k, value: v)
+                    }
                 }
 
-    }
-    catch(Exception e)
-    {
-        println "Exception was raised: ${e.getMessage()}"
-        System.exit(1)
-    }
-    finally
-    {
+    } catch (Exception e) {
+        fail "Exception was raised: %s", e.message
+    } finally {
         outputThread?.interrupt()
     }
 
@@ -813,8 +893,6 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false, ti
 
 def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 {
-    // Ant.exec could also be an option...but is not really simpler than below...
-
     def targetDir = new File(destDir)
 
     if (!targetDir.exists()) {
@@ -848,36 +926,54 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 
 def maybeSudoize(Map map = [:], command)
 {
-    def user = map.user ?: postgres_user
-    psql_sudo_user ? ['sudo', '-u', user, *command] : command
+    def user = map.user ?: pg_effective_user
+    psql_sudo_user ? ['sudo', '-E', '-u', user, *command] : command
 }
+
+def executePsql(Map map = [:], List<String> extraParams, tool = null)
+{
+    def databaseName = map.database ?: pg_database
+    map.environment  = map.environment ?: [:]
+    tool             = tool ?: tools_psql_cmd
+
+    params = ['-d', databaseName]
+    if (pg_user) {
+        params << '-U'
+        params << pg_user
+    }
+    if (pg_host) {
+        params << '-h'
+        params << pg_host
+    }
+    if (pg_port) {
+        params << '-p'
+        params << pg_port
+    }
+    if (pg_password) {
+        map.environment.PGPASSWORD = pg_password
+    }
+
+    def command = maybeSudoize([tool, *params, *extraParams])
+    commandStepN(map, command)
+}
+
 def dbCommand(Map map = [:], sqlCommand)
 {
-    def user = map.user ?: postgres_user
-    def databaseName = map.database ?: working_db
-
-    def command = [tools_psql_cmd, '-U', user, "-d", databaseName, '-c', sqlCommand]
-    commandStepN(map, maybeSudoize(user: user, command))
+    executePsql(map, ['-c', sqlCommand])
 }
 
-//TODO : we can also add a parameter "host" and use -h host to execute the scripts on a remote DB...
-def dbScriptStep(scriptFileName, user, databaseName, failOnError=true, quiet=true, dir=".", password=null)
+def dbScriptStep(scriptFileName, databaseName, failOnError=true, quiet=true, dir = ".", password=null)
 {
-    println "About to execute SQL script $scriptFileName"
+    info "About to execute SQL script %s", scriptFileName
 
-    def command =  maybeSudoize(user: user, [tools_psql_cmd, '-U', user, "-f", scriptFileName])
+    def extraParams = ["-f", scriptFileName]
 
-    //checkout specified branch :
-    if (databaseName)
-    {
-        command.add("-d")
-        command.add(databaseName)
+    if (quiet) {
+        extraParams << "--quiet"
     }
-    if (quiet)
-    {
-        command.add("--quiet")
-    }
-    commandStep(command, failOnError, dir, password, quiet, 30000000)//500min timeout ...
+
+    executePsql(extraParams, database: databaseName, failOnError: failOnError,
+            dir: dir, timeout: 36000000)
 }
 
 
@@ -942,15 +1038,14 @@ private static String string2File(String value, String fileName) throws IOExcept
 
 }
 
-//Alternative for ant.property method which does not seem to work...
-//ant.property( file : 'D:\\development\\transmartAppInstaller\\scripts\\setupTranSMARTDevelopment.properties' )  //TODO : find out how to read out these properties. Then we could set properties below in the .properties file and read it out from there
-//def properties = ant.getProperties();
 def readProperties(propertiesFileName)
 {
     def propertiesFile = new FileReader(propertiesFileName)
     def properties = new Properties()
     properties.load(propertiesFile)
-    return properties
+    propertiesFile.close()
+
+    properties
 }
 /**
  * This method will replace the value of the given property with the given value in the
@@ -978,6 +1073,24 @@ def replacePropertyInFile(propertiesFileName, propertyName, newPropertyValue, pu
     def output = new FileOutputStream(propertiesFileName)   */
     //the # character added here gives problems in Groovy parser ! properties.store(output, "# nb: " + propertyName + " changed by transmastAppIntaller ")
     //output.close()
+}
+
+def which(String executable) {
+    def separator = host_os_type == 'windows' ? ';' : ':'
+    def paths = System.getenv().PATH.split(separator) /* does not handle quoted paths */
+
+    paths.findResult {
+        def fullPath = it | executable | exec_postfix
+        new File(fullPath).canExecute() ? fullPath : null
+    }
+}
+
+
+def echo(String severity, String format, Object... args) {
+    ant.echo message: sprintf(format, args), level: severity
+}
+def fail(String format, Object... args) {
+    ant.fail message: sprintf(format, args)
 }
 
 /**

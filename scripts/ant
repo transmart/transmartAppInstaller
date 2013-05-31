@@ -1,0 +1,4 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+$JAVA_HOME/bin/java -jar $DIR/../lib/org.apache.ant/ant-launcher/jars/ant-launcher-1.8.2.jar -cp $DIR/../lib/org.apache.ant/ant/jars/ant-1.8.2.jar $@

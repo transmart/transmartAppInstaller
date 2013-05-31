@@ -1,0 +1,47 @@
+### Use full paths. You can leave these blank for automatic values
+#tools.git.cmd=/usr/bin/git
+#tools.psql.cmd=/usr/bin/psql
+
+### If not set, bultin ant will be used
+#tools.ant.cmd=/usr/bin/ant
+
+### Use preconfigured JBoss 4.2.2.GA, which can be found at
+### http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz
+### Leave this empty if you don't want to install i2b2 (core integration branch)
+#locations.jboss=/opt/transmart/jboss-4.2.2.GA
+
+### Used to build some paths in the configuration file
+locations.tomcat=/var/lib/tomcat7
+
+### These should be writable by the user running the script
+locations.build.out=/opt/transmart/build
+locations.db.tablespaces=/opt/transmart/db
+
+### Home directory for the user that'll be running transmart
+locations.transmartuser.home=/usr/share/tomcat7
+
+### only needed for obscure functionality in ts
+locations.plink.executables=/opt/transmart/plink
+
+### jboss port should be same as ${locations.jboss}/server/default/deploy/jboss-web.deployer/server.xml
+### irrelevant for core-integration branch
+ports.jboss=9090
+
+ports.solr=8080
+
+### A postgres role with superuser privileges
+### You can leave it blank, which will commonly use a role with the same name as
+### your (system) username 
+postgres.user=postgres
+
+### The database for connecting to before creating the transmart database
+### If you leave it blank, a db with the same name as the role chosen before 
+### will be preferred
+#postgres.workingdb=postgres
+
+### Other possible database variables. You should also be able to use the
+### environment variables PGHOST, PGPASSWORD, etc.
+#postgres.password=
+### set this in order not to use unix sockets:
+#postgres.host=localhost
+#postgres.port=5432
