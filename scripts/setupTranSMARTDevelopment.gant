@@ -173,7 +173,7 @@ def validateEnvironment() {
     /* }}} */
 
     /* {{{ Ant */
-    if (!tools_cmd_ant) {
+    if (!tools_ant_cmd) {
         if (host_os_type == 'unix') {
             def thisFile = binding.'gant.file'.substring('file:'.length())
             tools_ant_cmd = new File(thisFile).parent | 'ant'
@@ -206,6 +206,7 @@ def validateEnvironment() {
     dirValidation "locations.build.out",          build_dir
     dirValidation "locations.db.tablespace",      transmart_db_tablespace_location
     dirValidation "locations.transmartuser.home", transmartuser_home
+    /* }}} */
 
     info "Everything validated, let's start"
 }
