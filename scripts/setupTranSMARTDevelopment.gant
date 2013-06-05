@@ -1,5 +1,7 @@
 import org.apache.tools.ant.taskdefs.Ant
 
+import java.util.concurrent.TimeUnit
+
 /*************************************************************************
  * transmartAppInstaller meant for  tranSMART - translational medicine data mart
  *
@@ -87,6 +89,7 @@ exec_postfix = null
 git_has_single_version = null
 psql_sudo_user = null
 pg_effective_user = null
+pg_process_user = null
 
 validateEnvironment()
 
@@ -132,7 +135,7 @@ def validateEnvironment() {
     }
 
     if (!pg_database && !System.getenv('PGDATABASE')) {
-        pg_database = pg_user ?: System. getProperty("user.name")
+        pg_database = pg_user ?: System.getProperty("user.name")
         warn 'postgres.workingdb was not specified, trying "%s"', pg_database
     }
 
@@ -159,8 +162,8 @@ def validateEnvironment() {
             }
         }
     }
-    result = executePsql(['-t', '-c', 'select rolsuper, current_user from ' +
-            'pg_authid where rolname = current_user'], failOnError: false)
+    result = executePsql(['-t', '-c', 'select rolsuper, current_user ' +
+            'from pg_authid where rolname = current_user'], failOnError: false)
     if (!result) {
         fail "Could not execute postgresql superuser probe. Check your settings"
     }
@@ -170,6 +173,34 @@ def validateEnvironment() {
                 output[1]
     }
     pg_effective_user = output[1]
+    info "We are using the database role '%s'", output[1]
+
+    if (host_os_type == 'unix') {
+        def q = new java.util.concurrent.ArrayBlockingQueue(1)
+        executePsql(['-t', '-q'],
+                callback: { Map params, List command ->
+                    Thread.start {
+                        def pb = new ProcessBuilder(*command)
+                        pb.environment().putAll(params.environment)
+                        def p = pb.start()
+                        p.out << 'select pg_backend_pid();\n'
+                        def r = new BufferedReader(new InputStreamReader(p.in))
+                        def pid = r.readLine()?.trim()
+                        if (pid)
+                            q.add("ps -ouser= -p $pid".execute().in.text.trim())
+                        else
+                            q.add(false)
+                        p.in.close()
+                    }
+                });
+
+        pg_process_user = q.poll(3, TimeUnit.SECONDS)
+        if (!pg_process_user) {
+            warn "Could not determine the user PostgreSQL runs as"
+        } else {
+            info "PostgreSQL user detected: '%s'", pg_process_user
+        }
+    }
     /* }}} */
 
     /* {{{ Ant */
@@ -246,6 +277,8 @@ target(clean: "clean-up to run again...")
 
 target(install: "The installation script") {
 
+    ensureTablespaces() /* first due to high prob of failure */
+
 //    Build tranSMART demo-data Tables
 //
 //    github - clone script repository
@@ -265,11 +298,7 @@ target(install: "The installation script") {
 //    create the transmart-specific i2b2 objects, linkages, and data
 //    3.  Create the ETL schema objects
 
-//    Prior to executing the script:
-//    a. Create the transmart database (can use script transmart-db.sql)
     createTransmartDB()
-//    b. In tablespaces.sql, update the directory locations of the tablespaces to be created.
-    ensureTablespaces()
 
 //   Step 1:
 //    The create-main.sql script will drop and then create schemas, objects,
@@ -298,6 +327,8 @@ target(configSteps: "final configuration steps")
 
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
 {
+    fixTablespaceLocation(build_dir | "transmartApp-DB/postgresql/tablespaces.sql")
+
     /* create dump: stop after verifyTransmartDB and run:
      * pg_dump -c -F c gustavo -f \
      *  dump_`git ls-remote git://github.com/transmart/transmartApp-DB.git -b postgresMigrate | head -c 7`_db
@@ -678,18 +709,57 @@ target(createTransmartDB: "createTransmartDB")
     dbCommand([:], command)
 }
 
-target(ensureTablespaces: "createTablespaces")
+target(ensureTablespaces: "create tablespace directories")
 {
-    println("Ensure ${transmart_db_tablespace_location} tablespace location directories are present")
+    def scriptUser = System.getProperty("user.name")
+    def attemptChown = host_os_type == 'unix' && scriptUser == 'root' &&
+            pg_process_user
+
+    if (!attemptChown && pg_process_user && scriptUser != pg_process_user) {
+        warn "We need to have tablespace directories that are owned by " +
+                "the user %s. Since we are not running as root, this " +
+                "will not be possible. Consequently, the script WILL " +
+                "FAIL unless you have previously ensured that the " +
+                "directories under %s exist and are owned by %s",
+                pg_process_user, transmart_db_tablespace_location,
+                pg_process_user
+    }
+    if (!attemptChown && !pg_process_user) {
+        warn "We need to have tablespace directories that are owned by " +
+                "the user postgres runs as. But since we were unable to " +
+                "determine which user that is, we cannot do that. You will " +
+                "still have to ensure that the directories under %s exist " +
+                "and are owned by the postgresql user. Otherwise, the script " +
+                "WILL FAIL at later stages",
+                transmart_db_tablespace_location
+        pause()
+    }
+
+
     mkdir(dir: transmart_db_tablespace_location)
     ['deapp','biomart','transmart','indx','search_app'].each {
         def db_dir = transmart_db_tablespace_location | it;
 
         mkdir(dir: db_dir);
-        chown(owner: 'postgres', type: 'dir', file: db_dir)
+        if (attemptChown) {
+            chown(owner: pg_process_user, type: 'dir', file: db_dir)
+        } else if (pg_process_user) {
+            try {
+                Class.forName('java.nio.file.Files')
+                String owner = java.nio.file.Files.getOwner(
+                        java.nio.file.Paths.get(db_dir)).name
+                if (owner != pg_process_user) {
+                    fail "Owner of %s should be %s, but it's %s and we are " +
+                            "unable to do anything about it. Aborting",
+                            db_dir, pg_process_user, owner
+                }
+            } catch (ClassNotFoundException cnfe) {
+                warn "Cannot detect owner for %s (only possible in Java 7)",
+                        db_dir
+                warn "ASSUMING THE OWNER IS CORRECT"
+            }
+        }
     }
-    fixTablespaceLocation(build_dir | "transmartApp-DB/postgresql/tablespaces.sql")
-    //nb: no need to execute this script here...just fixing it...this is a prep for a later step
 }
 
 target(verifySEARCHAPPdata: "verify SEARCHAPP data")
@@ -821,24 +891,36 @@ Thread tailThread(File file) {
 
 def commandStepN(Map args = [:], command)
 {
-    def failOnError = args.failOnError == null ? true : args.failOnError
-    def dir         = args.dir ?: '.'
-    def inputString = args.inputString
-    def quiet       = args.quiet == null ? false : args.quiet
-    def timeout     = args.timeout == null ? 600000 : args.timeout
-    def output      = args.output == null ? ant_last_step_output : args.output;
-    def environment = args.environment ?: [:]
+    args = new HashMap(args)
 
-    commandStep(command, failOnError, dir, inputString, quiet, timeout,
-            output, environment)
+    args.failOnError = args.failOnError == null ? true : args.failOnError
+    args.dir         = args.dir ?: '.'
+    args.inputString = args.inputString
+    args.quiet       = args.quiet == null ? false : args.quiet
+    args.timeout     = args.timeout == null ? 600000 : args.timeout
+    args.output      = args.output == null ? ant_last_step_output : args.output;
+    args.environment = args.environment ?: [:]
+
+    if (!args.callback) {
+        commandStep(command, args.failOnError, args.dir, args.inputString,
+                args.quiet, args.timeout, args.output, args.environment)
+    } else {
+        args.callback(args, command)
+    }
 }
+
+def pause() {
+    System.err.println("Press ENTER to continue")
+    System.in.read()
+    System.in.skip(System.in.available())
+}
+
 def commandStep(command, failOnError, dir=".", inputString=null, quiet=false,
                 timeout = 600000, output=ant_last_step_output, environment=[:])
 {
     // Uncomment this for an interactive mode:
     //println "About to execute $command on dir ${dir ? dir : 'CWD' }..."
-    //System.in.read()
-    //System.in.skip(System.in.available())
+    //pause()
 
     //workaround for quotes in dir...this gives problems, so remove all
     dir = dir.replaceAll("\"", "")
