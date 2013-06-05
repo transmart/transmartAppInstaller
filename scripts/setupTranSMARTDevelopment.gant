@@ -149,7 +149,7 @@ def validateEnvironment() {
             }
 
             warn "Failed connecting to the database. Trying now with sudo"
-            psql_sudo_user = true
+            psql_sudo_user = pg_user
             result = executePsql(['-t', '-c', 'select 2'], failOnError: false)
 
             if (!result) {
@@ -919,7 +919,7 @@ def gitStep(repositoryUrl, destDir, branch=null, failOnError=true)
 
 def maybeSudoize(Map map = [:], command)
 {
-    def user = map.user ?: pg_effective_user
+    def user = map.user ?: psql_sudo_user
     psql_sudo_user ? ['sudo', '-E', '-u', user, *command] : command
 }
 
