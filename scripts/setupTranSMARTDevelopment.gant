@@ -257,6 +257,12 @@ target(cleanBuildDir: 'delete build dir contents')
 
 target(clean: "clean-up to run again...")
 {
+	clean_db()
+	clean_config_files()
+}
+
+target(clean_db: "clean out the database...")
+{
     //drop postgres "transmart" db:
     def command =  "drop database if exists $transmart_db_name"
     dbCommand(command, failOnError: true)
@@ -270,7 +276,10 @@ target(clean: "clean-up to run again...")
     roles.each {
         dbCommand("drop role $it", failOnError: false, quiet: true)
     }
+}
 
+target(clean_config_files: "clean out the config files...)
+{
     //remove <user_home>/.grails/transmartConfig files:
     delete(dir: transmartuser_home | ".grails/transmartConfig")
 }
