@@ -333,7 +333,7 @@ target(addRoles: "Add the database roles for GEO studies")
 target(installGEOStudies: "install the three GEO studies that were pulled from the GA1.0 release")
 {
     def scriptDir = build_dir | "transmartApp-DB/postgresql_version"
-    def file = new File(build_dir, "all_but_tm.dump")
+    def file = new File(scriptDir, "all_but_tm.dump")
     executePsql(
            dir: build_dir,
            database: transmart_db_name,
@@ -341,7 +341,7 @@ target(installGEOStudies: "install the three GEO studies that were pulled from t
            new File(tools_psql_cmd).parent.toString() | 'pg_restore' + exec_postfix
     )
 
-    file = new File(build_dir, "tm_schema_only.dump")
+    file = new File(scriptDir, "tm_schema_only.dump")
     executePsql(
             dir: build_dir,
             database: transmart_db_name,
