@@ -288,11 +288,11 @@ target(newInstall: "Install only the GEO studies, GSE9150, GSE4382, GSE14860") {
     
     def scriptDir = build_dir | "transmartApp-DB/postgresql_version"
     
-    try {
-        eusureTablespaces() /* do this first due to high probability of failure */
+    ensureTablespaces() /* do this first due to high probability of failure */
 
-        createTransmartDB()
-        
+    createTransmartDB()
+   
+    try{     
         // fetch the postgresMigrate branch of transmartApp-DB 
         gitStep("git://github.com/transmart/transmartApp-DB.git",
                 build_dir | "transmartApp-DB", "postgresMigrate", true)
@@ -307,19 +307,19 @@ target(newInstall: "Install only the GEO studies, GSE9150, GSE4382, GSE14860") {
         dbScriptStep(scriptFileName, transmart_db_name, dir: scriptDir);
     
         // install the three GEO studies that were pulled from the GA1.0 release
-        def file = new File(build_dir, "all_but_tm.dump")
+        def file = new File(scriptDir, "all_but_tm.dump")
         executePsql(
                 dir: build_dir,
                 database: transmart_db_name,
-                [file.getPath()],
+                ["-c","-C","-O",file.getPath()],
                 new File(tools_psql_cmd).parent.toString() | 'pg_restore' + exec_postfix
         )
 
-        def file = new File(build_dir, "tm_schema_only.dump")
+        file = new File(scriptDir, "tm_schema_only.dump")
         executePsql(
                 dir: build_dir,
                 database: transmart_db_name,
-                [file.getPath()],
+                ["-c","-C","-O",file.getPath()],
                 new File(tools_psql_cmd).parent.toString() | 'pg_restore' + exec_postfix
         )
         
