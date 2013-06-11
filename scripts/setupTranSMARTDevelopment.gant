@@ -341,7 +341,7 @@ target(installGEOStudies: "install the three GEO studies that were pulled from t
            new File(tools_psql_cmd).parent.toString() | 'pg_restore' + exec_postfix
     )
 
-    def file = new File(build_dir, "tm_schema_only.dump")
+    file = new File(build_dir, "tm_schema_only.dump")
     executePsql(
             dir: build_dir,
             database: transmart_db_name,
