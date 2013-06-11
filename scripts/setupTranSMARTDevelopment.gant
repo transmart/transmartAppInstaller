@@ -294,9 +294,9 @@ target(newInstall: "Install only the GEO studies, GSE9150, GSE4382, GSE14860") {
    
     fetchDBScripts()
 
-    try{     
+    createTablespaces()
 
-        createTablespaces()
+    try{     
 	
 		addRoles()
 
@@ -320,14 +320,14 @@ target(createTablespaces: "Create the tablespace entries for the GEO studies")
     def scriptDir = build_dir | "transmartApp-DB/postgresql_version"
     scriptFileName = "tablespaces.sql"
     updateStudyInstallTablespaceLocations(scriptDir | scriptFileName, "/opt/transmart/db/")
-    dbScriptStep(scriptFileName, transmart_db_name, dir: scriptDir);
+    dbScriptStep(scriptFileName, transmart_db_name, true, true, scriptDir);
 }
 
 target(addRoles: "Add the database roles for GEO studies")
 {
     def scriptDir = build_dir | "transmartApp-DB/postgresql_version"
     def scriptFileName = "roles.sql"
-    dbScriptStep(scriptFileName, transmart_db_name, dir: scriptDir);
+    dbScriptStep(scriptFileName, transmart_db_name, true, true, scriptDir);
 }
 
 target(installGEOStudies: "install the three GEO studies that were pulled from the GA1.0 release")
