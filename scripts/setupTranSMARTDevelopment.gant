@@ -264,6 +264,7 @@ target(clean: "clean-up to run again...")
 target(clean_db: "clean out the database...")
 {
     //drop postgres "transmart" db:
+    echo ("If Drop database fails, check for existing connections to the database")
     def command =  "drop database if exists $transmart_db_name"
     dbCommand(command, failOnError: true)
 
