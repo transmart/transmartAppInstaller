@@ -77,6 +77,9 @@ pg_database                      = properties['postgres.workingdb']
 pg_host                          = properties['postgres.host']
 pg_port                          = properties['postgres.port']
 
+git_clone_branch_db              = properties['git.branch.db']
+git_clone_branch_config          = properties['git.branch.config']
+
 webapps_subdir                   = 'applications'
 webapps_data                     = 'appdata'
 
@@ -305,10 +308,10 @@ target(newInstall: "Install only the GEO studies, GSE9150, GSE4382, GSE14860") {
     
 }
 
-target(fetchDBScripts: "fetch the postgresMigrate branch of transmartApp-DB")
+target(fetchDBScripts: "fetch the postgresMigrate branch of transmartApp-DB or specified branch")
 {
     gitStep("git://github.com/transmart/transmartApp-DB.git",
-            build_dir | "transmartApp-DB", "postgresMigrate", true)
+            build_dir | "transmartApp-DB", git_clone_branch_db | "postgresMigrate", true)
 }
 
 target(createTablespaces: "Create the tablespace entries for the GEO studies")
@@ -372,7 +375,7 @@ target(install: "The installation script") {
 //    Build initiial PostgreSQL databases (for both transMart and i2b2)
 //    cd postgresql , then instructions in readme
     gitStep("git://github.com/transmart/transmartApp-DB.git",
-            build_dir | "transmartApp-DB", "postgresMigrate", true)
+            build_dir | "transmartApp-DB", git_clone_branch_db | "postgresMigrate", true)
 
 //    There are 3 main steps to creating the transmart database:
 //    1.  Create the transmart schemas (and all objects not part of i2b2 or ETL)
@@ -504,7 +507,8 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 {
     //git clone https://github.com/transmart/transmartApp-Config.git  branch   postgresMigrate
     def transmartConfigDir = build_dir | "transmartApp-Config"
-    gitStep("git://github.com/transmart/transmartApp-Config.git", transmartConfigDir, "postgresMigrate")
+    gitStep("git://github.com/transmart/transmartApp-Config.git", transmartConfigDir, 
+    	git_clone_branch_config | "postgresMigrate")
 
 //    Checkout contains:
 //    External configuration files for transmart application

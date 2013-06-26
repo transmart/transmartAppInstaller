@@ -23,6 +23,14 @@ locations.transmartuser.home=/usr/share/tomcat7
 ### only needed for obscure functionality in ts
 locations.plink.executables=/opt/transmart/plink
 
+### Used to build from a specific branch (in git)
+### applied for transmartApp-DB (.db) and transmartApp-Config (.config)
+### defaults to 
+### (but not for i2b2!)
+### same branch for all clones (should work for tags as well)
+# git.branch.db=fixes_for_Beta_V1Point1
+# git.branch.config=fixes_for_Beta_V1Point1
+
 ### jboss port should be same as ${locations.jboss}/server/default/deploy/jboss-web.deployer/server.xml
 ### irrelevant for core-integration branch
 ports.jboss=9090
