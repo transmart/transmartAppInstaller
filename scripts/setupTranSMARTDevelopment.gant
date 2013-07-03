@@ -289,7 +289,7 @@ target(install: "The installation script") {
 //    git checkout -b postgresMigrate origin/postgresMigrate
 //    Build initiial PostgreSQL databases (for both transMart and i2b2)
 //    cd postgresql , then instructions in readme
-    gitStep("git://github.com/transmart/transmartApp-DB.git",
+    gitStep("https://github.com/transmart/transmartApp-DB.git",
             build_dir | "transmartApp-DB", "postgresMigrate", true)
 
 //    There are 3 main steps to creating the transmart database:
@@ -331,7 +331,7 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
 
     /* create dump: stop after verifyTransmartDB and run:
      * pg_dump -c -F c gustavo -f \
-     *  dump_`git ls-remote git://github.com/transmart/transmartApp-DB.git -b postgresMigrate | head -c 7`_db
+     *  dump_`git ls-remote https://github.com/transmart/transmartApp-DB.git -b postgresMigrate | head -c 7`_db
      */
     /* See if we have a dump for this version of transmartApp-DB */
     def dir = build_dir | "transmartApp-DB" | '.git'
@@ -422,7 +422,7 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 {
     //git clone https://github.com/transmart/transmartApp-Config.git  branch   postgresMigrate
     def transmartConfigDir = build_dir | "transmartApp-Config"
-    gitStep("git://github.com/transmart/transmartApp-Config.git", transmartConfigDir, "postgresMigrate")
+    gitStep("https://github.com/transmart/transmartApp-Config.git", transmartConfigDir, "postgresMigrate")
 
 //    Checkout contains:
 //    External configuration files for transmart application
@@ -550,7 +550,7 @@ target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
 //    Download i2b2 upgrades and data loading for PostgreSQL upgrade - github/transmart/i2b2_1.6_postgres
 //    Use master branch
     def i2b2Dir = build_dir | "i2b2_1.6_postgres"
-    gitStep("git://github.com/transmart/i2b2_1.6_Postgres.git", i2b2Dir)
+    gitStep("https://github.com/transmart/i2b2_1.6_Postgres.git", i2b2Dir)
 
 //    a2.  Execute the i2b2 postgresql import scripts
 //    From i2b2Dir/readme :
