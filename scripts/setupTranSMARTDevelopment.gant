@@ -307,7 +307,7 @@ target(newInstall: "Install only the GEO studies, GSE9150, GSE4382, GSE14860") {
 
 target(fetchDBScripts: "fetch the postgresMigrate branch of transmartApp-DB")
 {
-    gitStep("git://github.com/transmart/transmartApp-DB.git",
+    gitStep("https://github.com/transmart/transmartApp-DB.git",
             build_dir | "transmartApp-DB", "postgresMigrate", true)
 }
 
