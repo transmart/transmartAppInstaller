@@ -230,7 +230,8 @@ def validateEnvironment() {
         if (!new File(directory).exists()) {
             warn "Directory %s does not exist; trying to create...", directory
             ant.mkdir(dir: directory)
-        } else if (!new File(directory).canWrite()) {
+        }
+        if (!new File(directory).canWrite()) {
             fail "No write permissions in %s, check %s", directory, settingName
         }
     }
@@ -293,11 +294,11 @@ target(newInstall: "Install only the GEO studies, GSE9150, GSE4382, GSE14860") {
 
     createTransmartDB()
    
-    fetchDBScripts()
+    fetchDBScripts()    
+
+    addRoles()    
 
     createTablespaces()
-
-    addRoles()
 
     installGEOStudies()    
         
@@ -307,7 +308,7 @@ target(newInstall: "Install only the GEO studies, GSE9150, GSE4382, GSE14860") {
 
 target(fetchDBScripts: "fetch the postgresMigrate branch of transmartApp-DB")
 {
-    gitStep("git://github.com/transmart/transmartApp-DB.git",
+    gitStep("https://github.com/transmart/transmartApp-DB.git",
             build_dir | "transmartApp-DB", "postgresMigrate", true)
 }
 
@@ -315,7 +316,7 @@ target(createTablespaces: "Create the tablespace entries for the GEO studies")
 {
     def scriptDir = build_dir | "transmartApp-DB/postgresql_version"
     scriptFileName = "tablespaces.sql"
-    updateStudyInstallTablespaceLocations(scriptDir | scriptFileName, "/opt/transmart/db/")
+    updateStudyInstallTablespaceLocations(scriptDir | scriptFileName, "/opt/transmart/db")
     dbScriptStep(scriptFileName, transmart_db_name, true, true, scriptDir);
 }
 
