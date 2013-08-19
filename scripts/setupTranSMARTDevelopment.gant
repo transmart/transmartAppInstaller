@@ -292,7 +292,7 @@ target(clean_install_scripts: "Cleanup and Install from scripts only the GEO stu
 	ensureTablespaces()
 	
 	//Fetch db scripts
-	gitStep("https://git.etriks.org/transmart-db.git", build_dir | "transmart-db", "master", true)
+	gitStep("https://github.com/transmart/transmartApp-DB.git", build_dir | "transmart-db", "fixes_for_Beta_V1Point1", true)
 	
 	//Drop/Create transmart schema
 	scriptFileName = "create-transmart-db.sql"
