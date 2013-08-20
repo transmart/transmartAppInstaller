@@ -258,7 +258,7 @@ def validateEnvironment() {
             warn "Directory %s does not exist; trying to create...", directory
             ant.mkdir(dir: directory)
         }
-	if (!new File(directory).canWrite()) {
+        if (!new File(directory).canWrite()) {
             fail "No write permissions in %s, check %s", directory, settingName
         }
 	info "Directory %s exists and is writable", directory
@@ -277,8 +277,8 @@ def validateEnvironment() {
 }
 
 target('default': "cleanup and setup") {
-    clean()
-    newInstall()
+    //clean()
+    clean_install_scripts()
 }
 
 target('setup': "test prerequisites") {
@@ -322,20 +322,46 @@ target(clean_config_files: "clean out the config files...")
     delete(dir: transmartuser_home | ".grails/transmartConfig")
 }
 
-target(newInstall: "Install only the GEO studies, GSE9150, GSE4382, GSE14860") {
+target(clean_install_scripts: "Cleanup and Install from scripts only the GEO studies, GSE9150, GSE4382, GSE14860") {
+	
+	def scriptDir = build_dir | "transmart-db/postgresql_wGEO"
+	ensureTablespaces()
+	
+	//Fetch db scripts
+	gitStep("https://github.com/transmart/transmartApp-DB.git", build_dir | "transmart-db", "fixes_for_Beta_V1Point1", true)
+	
+	//Drop/Create transmart schema
+	scriptFileName = "create-transmart-db.sql"
+	dbScriptStep(scriptFileName, transmart_db_name, true, true, scriptDir);
+	
+	//Create tablespaces
+	scriptFileName = "tablespaces.sql"
+	updateStudyInstallTablespaceLocations(scriptDir | scriptFileName, "__TABLESPACES_DIR__")
+	dbScriptStep(scriptFileName, transmart_db_name, true, true, scriptDir);
+	
+	//Create schemas
+	scriptFileName = "create-main.sql"
+	dbScriptStep(scriptFileName, transmart_db_name, true, true, scriptDir);
+	
+	//clean & setup transmart .grails config files
+	clean_config_files()
+	configTransmartApp()
+	
+}
+
+target(install_dump: "Install from dump only the GEO studies, GSE9150, GSE4382, GSE14860") {
     
-    def scriptDir = build_dir | "transmartApp-DB/postgresql_version"
+    def scriptDir = build_dir | "transmartApp-DB/postgresql_wGEO_dump"
     
     ensureTablespaces() /* do this first due to high probability of failure */
 
     createTransmartDB()
    
-    fetchDBScripts()
+    fetchDBScripts()    
+
 
     createTablespaces()
-
-    addRoles()
-
+    addRoles()  
     installGEOStudies()    
         
     configSteps()
@@ -352,7 +378,7 @@ target(createTablespaces: "Create the tablespace entries for the GEO studies")
 {
     def scriptDir = build_dir | "transmartApp-DB/postgresql_version"
     scriptFileName = "tablespaces.sql"
-    updateStudyInstallTablespaceLocations(scriptDir | scriptFileName, "/opt/transmart/db/")
+    updateStudyInstallTablespaceLocations(scriptDir | scriptFileName, "/opt/transmart/db")
     dbScriptStep(scriptFileName, transmart_db_name, true, true, scriptDir);
 }
 
@@ -450,7 +476,7 @@ target(populateTransmartDB: "populateTransmartDB - filling the database. Please 
 
     /* create dump: stop after verifyTransmartDB and run:
      * pg_dump -c -F c gustavo -f \
-     *  dump_`git ls-remote git://github.com/transmart/transmartApp-DB.git -b postgresMigrate | head -c 7`_db
+     *  dump_`git ls-remote https://github.com/transmart/transmartApp-DB.git -b postgresMigrate | head -c 7`_db
      */
     /* See if we have a dump for this version of transmartApp-DB */
     def dir = build_dir | "transmartApp-DB" | '.git'
@@ -541,8 +567,8 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 {
     //git clone https://github.com/transmart/transmartApp-Config.git  branch   postgresMigrate
     def transmartConfigDir = build_dir | "transmartApp-Config"
-    gitStep("git://github.com/transmart/transmartApp-Config.git", transmartConfigDir, 
-    	git_clone_branch_config)
+    gitStep("git://github.com/transmart/transmartApp-Config.git", 
+        transmartConfigDir, git_clone_branch_config)
 
 //    Checkout contains:
 //    External configuration files for transmart application
@@ -670,7 +696,7 @@ target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
 //    Download i2b2 upgrades and data loading for PostgreSQL upgrade - github/transmart/i2b2_1.6_postgres
 //    Use master branch
     def i2b2Dir = build_dir | "i2b2_1.6_postgres"
-    gitStep("git://github.com/transmart/i2b2_1.6_Postgres.git", i2b2Dir)
+    gitStep("https://github.com/transmart/i2b2_1.6_Postgres.git", i2b2Dir)
 
 //    a2.  Execute the i2b2 postgresql import scripts
 //    From i2b2Dir/readme :
