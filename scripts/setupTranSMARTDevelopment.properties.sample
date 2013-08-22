@@ -19,7 +19,7 @@ locations.plink.executables=/opt/transmart/plink
 
 ### jboss port should be same as ${locations.jboss}/server/default/deploy/jboss-web.deployer/server.xml
 ### irrelevant for core-integration branch
-ports.jboss=9090
+#ports.jboss=9090
 
 ports.solr=8080
 
@@ -39,3 +39,6 @@ postgres.user=postgres
 ### set this in order not to use unix sockets:
 #postgres.host=localhost
 #postgres.port=5432
+
+### Target version TAG
+#github.tag=GPL1.1_Beta_RC4
