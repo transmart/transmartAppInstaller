@@ -3,7 +3,7 @@ import org.apache.tools.ant.taskdefs.Ant
 import java.util.concurrent.TimeUnit
 
 /*************************************************************************
- * transmartAppInstaller meant for  tranSMART - translational medicine data mart
+ * transmartAppInstaller for tranSMART - translational medicine data mart
  *
  *
  * Apache License, Version 2.0, January 2004
@@ -11,6 +11,9 @@ import java.util.concurrent.TimeUnit
  * Copyright 2012 The Hyve B.V.
  *
  * Author : pieter lukasse (pieter@thehyve.nl)
+ *
+ *
+ * NOTE: This installer is for GPL1.1_Beta_RC4
  *
  ******************************************************************/
 
@@ -27,11 +30,9 @@ import java.util.concurrent.TimeUnit
  *
  * Pre-requisites (available from command line - or configured in setupTranSMARTDevelopment.properties):
  *
- *  - git
- *  - psql (postgres sql )
+ *  - ant
+ *  - psql (PostgreSQL)
  *  - a properly configured setupTranSMARTDevelopment.properties
- *  - (optional) pre-configured jboss (JBoss 4.2.2.GA see
- *    http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz )
  *
  * @author : pieter lukasse (pieter@thehyve.nl)
  */
@@ -55,12 +56,9 @@ String.metaClass.compareVersion = { String s ->
 }
 File.metaClass.or = { String s -> new File(delegate, s).path }
 
-tools_git_cmd                    = properties["tools.git.cmd"]
 tools_psql_cmd                   = properties["tools.psql.cmd"]
 tools_ant_cmd                    = properties["tools.ant.cmd"]
 
-locations_jboss                  = properties["locations.jboss"] //leave empty in order not to setup i2b2 runtime
-ports_jboss                      = properties["ports.jboss"] //TODO jboss port can be read from ${locations_jboss}/server/default/deploy/jboss-web.deployer/server.xml
 ports_solr                       = properties["ports.solr"]
 
 locations_tomcat                 = properties["locations.tomcat"]
@@ -76,6 +74,9 @@ pg_password                      = properties['postgres.password']
 pg_database                      = properties['postgres.workingdb']
 pg_host                          = properties['postgres.host']
 pg_port                          = properties['postgres.port']
+
+git_clone_branch_db              = properties['git.branch.db']
+git_clone_branch_config          = properties['git.branch.config']
 
 webapps_subdir                   = 'applications'
 webapps_data                     = 'appdata'
@@ -103,27 +104,6 @@ def validateEnvironment() {
         host_os_type = "unix"
 
     exec_postfix = host_os_type == "windows" ? '.exe' : ''
-
-    /* {{{ Git */
-    tools_git_cmd = tools_git_cmd ?: which('git')
-    if (!tools_git_cmd) {
-        fail 'Git executable location not specified'
-    }
-    if (!new File(tools_git_cmd).canExecute()) {
-        fail 'Git location "%s" is invalid', tools_git_cmd
-    }
-
-    try {
-        result = ([tools_git_cmd, '--version'].execute().text =~ /(?:\d+\.)+\d+/)[0]
-        git_has_single_branch = result.compareVersion('1.7.10') >= 0
-        if (!git_has_single_branch) {
-            warn 'Your version of git does not support --single-branch; ' +
-                    'checkout times will be longer'
-        }
-    } catch (e) {
-        fail 'Could not determine git version: %s', e.message
-    }
-    /* }}} */
 
     /* {{{ psql */
     tools_psql_cmd = tools_psql_cmd ?: which('psql')
@@ -292,7 +272,11 @@ target(clean_install_scripts: "Cleanup and Install from scripts only the GEO stu
 	ensureTablespaces()
 	
 	//Fetch db scripts
+<<<<<<< HEAD
 	gitStep("https://git.etriks.org/transmart-db.git", build_dir | "transmart-db", "master", true)
+=======
+	fetchDBScripts()
+>>>>>>> refs/heads/fixes_for_Beta_V1Point1
 	
 	//Drop/Create transmart schema
 	scriptFileName = "create-transmart-db.sql"
@@ -333,10 +317,16 @@ target(install_dump: "Install from dump only the GEO studies, GSE9150, GSE4382, 
     
 }
 
-target(fetchDBScripts: "fetch the postgresMigrate branch of transmartApp-DB")
+target(fetchDBScripts: "fetch the fixes_for_Beta_V1Point1 branch (update to appropriate release tag) of transmartApp-DB")
 {
+<<<<<<< HEAD
     gitStep("https://github.com/transmart/transmartApp-DB.git",
             build_dir | "transmartApp-DB", "postgresMigrate", true)
+=======
+	ant.get(src: "https://github.com/transmart/transmartApp-DB/archive/GPL1.1_Beta_RC4.zip", dest: build_dir | "transmartApp-DB-GPL1.1_Beta_RC4.zip")
+	ant.unzip(src: build_dir | "transmartApp-DB-GPL1.1_Beta_RC4.zip", dest: build_dir)
+	ant.move(file: build_dir | "transmartApp-DB-GPL1.1_Beta_RC4", tofile: build_dir | "transmart-db")
+>>>>>>> refs/heads/fixes_for_Beta_V1Point1
 }
 
 target(createTablespaces: "Create the tablespace entries for the GEO studies")
@@ -385,6 +375,7 @@ def updateStudyInstallTablespaceLocations(String scriptFileLocation, String targ
     return scriptFileLocation;
 }
 
+<<<<<<< HEAD
 target(install: "The installation script") {
 
     ensureTablespaces() /* first due to high prob of failure */
@@ -430,11 +421,14 @@ target(install: "The installation script") {
     configSteps()
 }
 
+=======
+>>>>>>> refs/heads/fixes_for_Beta_V1Point1
 target(configSteps: "final configuration steps")
 {
     configTransmartApp()
 }
 
+<<<<<<< HEAD
 target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
 {
     fixTablespaceLocation(build_dir | "transmartApp-DB/postgresql/tablespaces.sql")
@@ -528,11 +522,19 @@ target(downloadI2B2: "Downloading and installing i2b2 version of tranSMART 1.0 G
 }
 
 
+=======
+>>>>>>> refs/heads/fixes_for_Beta_V1Point1
 target(configTransmartApp: "setting up the configuration files in <user home>/.grails/transmartConfig/")
 {
     //git clone https://github.com/transmart/transmartApp-Config.git  branch   postgresMigrate
     def transmartConfigDir = build_dir | "transmartApp-Config"
+<<<<<<< HEAD
     gitStep("https://github.com/transmart/transmartApp-Config.git", transmartConfigDir, "postgresMigrate")
+=======
+      ant.get(src: "https://github.com/transmart/transmartApp-Config/archive/GPL1.1_Beta_RC4.zip", dest: build_dir | "transmartApp-Config-GPL1.1_Beta_RC4.zip")
+      ant.unzip(src: build_dir | "transmartApp-Config-GPL1.1_Beta_RC4.zip", dest: build_dir)
+	  ant.move(file: build_dir | "transmartApp-Config-GPL1.1_Beta_RC4", tofile: build_dir | "transmartApp-Config")
+>>>>>>> refs/heads/fixes_for_Beta_V1Point1
 
 //    Checkout contains:
 //    External configuration files for transmart application
@@ -566,10 +568,6 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
             "com.recomdata.searchengine.index",
             locations_tomcat | webapps_data | "transmart/index", true)
 
-    // i2b2 project management cell url
-    replacePropertyInFile(configGroovy,
-            "com.recomdata.datasetExplorer.pmServiceURL", "http://localhost:${ports_jboss}/i2b2/rest/PMService/", true)
-
     //TODO  genePattern (tool from BroadInstitute) settings?
 
     //PLINK config: Whole genome association analysis toolset from http://pngu.mgh.harvard.edu/~purcell/plink/
@@ -579,7 +577,6 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
     //SOLR ("Lucene-based search server" from Apache) config:
     replacePropertyInFile(configGroovy,
             "com.recomdata.solr.baseURL", "http://localhost:${ports_solr}", true)
-
 
     //This is the directory to the R plugins.
     replacePropertyInFile(configGroovy,
@@ -612,7 +609,6 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
     //TODO - edit DataSource.config to reflect your postgreSQL (you might have to change host, port, username, password)    - this is left with DEFAULT values for now
 
 
-
     //Edit RModulesConfig.groovy, look at these values
     //
     //    pluginScriptDirectory
@@ -629,6 +625,7 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 
 }
 
+<<<<<<< HEAD
 
 target(executePostI2b2Scripts: "the POST I2b2 Import Scripts")
  {
@@ -810,6 +807,8 @@ target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by 
     commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.fr")
 }
 
+=======
+>>>>>>> refs/heads/fixes_for_Beta_V1Point1
 target(createTransmartDB: "createTransmartDB")
 {
     def command = "CREATE DATABASE $transmart_db_name " +
@@ -870,55 +869,6 @@ target(ensureTablespaces: "create tablespace directories")
             }
         }
     }
-}
-
-target(verifySEARCHAPPdata: "verify SEARCHAPP data")
-{
-    dbScriptStep(build_dir |
-            "transmartApp-DB/postgresql/searchapp/data/check_counts.sql",
-            transmart_db_name, true, false, ".")
-
-    FileReader reader = new FileReader(ant_last_step_output)
-    def counts = readCounts(reader.readLines())
-
-    //verify some of the counts:
-    assertEquals(counts,"SEARCH_KEYWORD_TERM",105844)
-    assertEquals(counts,"SEARCH_KEYWORD",42114)
-    assertEquals(counts,"SEARCH_REQUEST_MAP",17)
-    assertEquals(counts,"PLUGIN_MODULE",11)
-}
-
-
-target(verifyDEAPPdata: "verify DEAPP data")
-{
-    dbScriptStep(build_dir |
-            "transmartApp-DB/postgresql/deapp/data/check_counts.sql",
-            transmart_db_name, true, false, ".")
-
-    FileReader reader = new FileReader(ant_last_step_output)
-    def counts = readCounts(reader.readLines())
-
-    //verify some of the counts:
-    assertEquals(counts,"DE_SUBJECT_MICROARRAY_DATA",54400)
-    assertEquals(counts,"DE_MRNA_ANNOTATION",5440)
-    assertEquals(counts,"DE_SUBJECT_SAMPLE_MAPPING",10)
-    assertEquals(counts,"DE_SAVED_COMPARISON",5)
-}
-
-target(verifyBIOMARTdata: "verify DEAPP data")
-{
-    dbScriptStep(build_dir |
-            "transmartApp-DB/postgresql/biomart/data/check_counts.sql",
-            transmart_db_name, true, false, ".")
-
-    FileReader reader = new FileReader(ant_last_step_output)
-    def counts = readCounts(reader.readLines())
-
-    //verify some of the counts:
-    assertEquals(counts,"BIO_ASSAY_FEATURE_GROUP",237002)
-    assertEquals(counts,"BIO_ASSAY_ANALYSIS_DATA",184538)
-    assertEquals(counts,"BIO_DATA_EXT_CODE",134965)
-    assertEquals(counts,"BIO_DATA_UID",126764)
 }
 
 
@@ -1167,19 +1117,6 @@ def replaceInFile(String fileName, String value, String newValue)
     def fileAsString = file2String(fileName)
     fileAsString = fileAsString.replaceAll(value, newValue)
     string2File(fileAsString, fileName)
-}
-
-
-def fixTablespaceLocation(String scriptFileName)
-{
-    //read script file and replace
-    // /opt/PostgreSQL/9.1/data/tablespaces/
-    //with
-    // transmart_db_tablespace_location
-    def scriptTemp = file2String(scriptFileName)
-    scriptTemp = scriptTemp.replaceAll("/opt/PostgreSQL/9.1/data/tablespaces", transmart_db_tablespace_location)
-    string2File(scriptTemp, scriptFileName)
-    return scriptFileName;
 }
 
 /**

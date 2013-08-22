@@ -1,14 +1,8 @@
 ### Use full paths. You can leave these blank for automatic values
-#tools.git.cmd=/usr/bin/git
 #tools.psql.cmd=/usr/bin/psql
 
 ### If not set, bultin ant will be used
 #tools.ant.cmd=/usr/bin/ant
-
-### Use preconfigured JBoss 4.2.2.GA, which can be found at
-### http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz
-### Leave this empty if you don't want to install i2b2 (core integration branch)
-#locations.jboss=/opt/transmart/jboss-4.2.2.GA
 
 ### Used to build some paths in the configuration file
 locations.tomcat=/var/lib/tomcat7
