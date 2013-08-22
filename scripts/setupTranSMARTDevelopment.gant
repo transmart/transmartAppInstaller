@@ -272,11 +272,7 @@ target(clean_install_scripts: "Cleanup and Install from scripts only the GEO stu
 	ensureTablespaces()
 	
 	//Fetch db scripts
-<<<<<<< HEAD
-	gitStep("https://git.etriks.org/transmart-db.git", build_dir | "transmart-db", "master", true)
-=======
 	fetchDBScripts()
->>>>>>> refs/heads/fixes_for_Beta_V1Point1
 	
 	//Drop/Create transmart schema
 	scriptFileName = "create-transmart-db.sql"
@@ -319,14 +315,9 @@ target(install_dump: "Install from dump only the GEO studies, GSE9150, GSE4382, 
 
 target(fetchDBScripts: "fetch the fixes_for_Beta_V1Point1 branch (update to appropriate release tag) of transmartApp-DB")
 {
-<<<<<<< HEAD
-    gitStep("https://github.com/transmart/transmartApp-DB.git",
-            build_dir | "transmartApp-DB", "postgresMigrate", true)
-=======
 	ant.get(src: "https://github.com/transmart/transmartApp-DB/archive/GPL1.1_Beta_RC4.zip", dest: build_dir | "transmartApp-DB-GPL1.1_Beta_RC4.zip")
 	ant.unzip(src: build_dir | "transmartApp-DB-GPL1.1_Beta_RC4.zip", dest: build_dir)
 	ant.move(file: build_dir | "transmartApp-DB-GPL1.1_Beta_RC4", tofile: build_dir | "transmart-db")
->>>>>>> refs/heads/fixes_for_Beta_V1Point1
 }
 
 target(createTablespaces: "Create the tablespace entries for the GEO studies")
@@ -375,166 +366,19 @@ def updateStudyInstallTablespaceLocations(String scriptFileLocation, String targ
     return scriptFileLocation;
 }
 
-<<<<<<< HEAD
-target(install: "The installation script") {
-
-    ensureTablespaces() /* first due to high prob of failure */
-
-//    Build tranSMART demo-data Tables
-//
-//    github - clone script repository
-//    create/find and cd to your github directory
-//    git clone https://github.com/transmart/transmartApp-DB
-//    change to branch: create a “tracking branch” for postgresMigrate
-//    cd transmartApp-DB
-//    git checkout -b postgresMigrate origin/postgresMigrate
-//    Build initiial PostgreSQL databases (for both transMart and i2b2)
-//    cd postgresql , then instructions in readme
-    gitStep("https://github.com/transmart/transmartApp-DB.git",
-            build_dir | "transmartApp-DB", "postgresMigrate", true)
-
-//    There are 3 main steps to creating the transmart database:
-//    1.  Create the transmart schemas (and all objects not part of i2b2 or ETL)
-//    2.  Execute the i2b2 postgresql database import scripts to
-//    create the transmart-specific i2b2 objects, linkages, and data
-//    3.  Create the ETL schema objects
-
-    createTransmartDB()
-
-//   Step 1:
-//    The create-main.sql script will drop and then create schemas, objects,
-//    and seed data in the transmart database. Takes quite some time
-    populateTransmartDB()
-
-    verifyTransmartDB()
-
-//    Step 2: Execute the i2b2 postgresql import scripts
-	if (locations_jboss) {
-		downloadI2B2()
-	}
-    
-    executeI2b2ImportScripts()
-
-//    Step 3: Post-i2b2 scripts (substitute for localhost, if appropriate)
-    executePostI2b2Scripts()
-
-    configSteps()
-}
-
-=======
->>>>>>> refs/heads/fixes_for_Beta_V1Point1
 target(configSteps: "final configuration steps")
 {
     configTransmartApp()
 }
 
-<<<<<<< HEAD
-target(populateTransmartDB: "populateTransmartDB - filling the database. Please wait, this can take some minutes... ")
-{
-    fixTablespaceLocation(build_dir | "transmartApp-DB/postgresql/tablespaces.sql")
-
-    /* create dump: stop after verifyTransmartDB and run:
-     * pg_dump -c -F c gustavo -f \
-     *  dump_`git ls-remote https://github.com/transmart/transmartApp-DB.git -b postgresMigrate | head -c 7`_db
-     */
-    /* See if we have a dump for this version of transmartApp-DB */
-    def dir = build_dir | "transmartApp-DB" | '.git'
-    //content: 'ref: refs/heads/postgresql-branch'
-    def head = new File(dir, 'HEAD').text.trim().split(/ /)[1]
-    def rev = new File(dir, head).text[0..6]
-
-    def filename = "dump_${rev}_db"
-    def file = new File(build_dir, filename)
-    def url = new URL("http://files.thehyve.net/$filename")
-    def out = new BufferedOutputStream(new FileOutputStream(file))
-
-    try {
-        out << url.openStream()
-        out.close()
-
-        /* the dump does not include tablespace definitions or roles,
-         * so we have to use the scripts here */
-        [
-                'tablespaces.sql',
-                'biomart_user.sql',
-                'searchapp/prerequisites.sql',
-                'biomart/prerequisites.sql',
-                'deapp/prerequisites.sql',
-                'i2b2_prerequisites.sql',
-                'bmuser_search_path.sql',
-        ].each {
-            dbScriptStep(build_dir | "transmartApp-DB/postgresql" | it,
-                    transmart_db_name, true, true,
-                    build_dir | "transmartApp-DB/postgresql", false)
-        }
-
-        /* alas, the scripts above also create schemas,
-          * which have to be dropped at this point */
-        def drops = "drop schema if exists biomart, deapp, searchapp, i2b2demodata, " +
-                "i2b2hive, i2b2metadata, i2b2pm, i2b2workdata cascade;"
-        dbCommand(drops, database: transmart_db_name)
-
-        executePsql(
-                dir: build_dir,
-                database: transmart_db_name,
-                [file.getPath()],
-                new File(tools_psql_cmd).parent.toString() | 'pg_restore' + exec_postfix
-        )
-    } catch (e) {
-        warn "Could not download or import dump file; reverting to SQL " +
-                "scripts (${e.message})"
-        dbScriptStep(build_dir |
-                "transmartApp-DB/postgresql/create-main.sql",
-                transmart_db_name, true, true,
-                build_dir | "transmartApp-DB/postgresql", false)
-    }
-}
-
-target(verifyTransmartDB: "verify transmartDB data is OK")
-{
-//  Verify SEARCHAPP table row counts using searchapp/data/check_counts.sql.
-    verifySEARCHAPPdata()
-//  Verify DEAPP table row counts using deapp/data/check_counts.sql.
-    verifyDEAPPdata()
-//  Verify BIOMART table row counts using biomart/data/check_counts.sql.
-    verifyBIOMARTdata()
-}
-
-target(downloadI2B2: "Downloading and installing i2b2 version of tranSMART 1.0 GA")
-{
-    def archive_file = build_dir | "jboss.tar.gz"
-
-    //Download i2b2 archive
-    ant.get(
-        src: "http://transmartproject.org/wiki/download/attachments/30441474/jboss-4.2.2.GA.tar.gz?version=1&modificationDate=1335242608000",
-        dest: archive_file
-    )
-
-    //extract archive and move into the target JBoss location
-    ant.untar(src: archive_file, dest: build_dir, compression: "gzip")
-    ant.move(file: build_dir | "jboss-4.2.2.GA", tofile: locations_jboss)
-
-    //Download PostgreSQL driver
-    ant.get(
-        src: "http://jdbc.postgresql.org/download/postgresql-9.2-1002.jdbc4.jar",
-        dest: locations_jboss | "server" | "default" | "lib"
-    )
-}
-
-
-=======
->>>>>>> refs/heads/fixes_for_Beta_V1Point1
 target(configTransmartApp: "setting up the configuration files in <user home>/.grails/transmartConfig/")
 {
     //git clone https://github.com/transmart/transmartApp-Config.git  branch   postgresMigrate
     def transmartConfigDir = build_dir | "transmartApp-Config"
-<<<<<<< HEAD
-    gitStep("https://github.com/transmart/transmartApp-Config.git", transmartConfigDir, "postgresMigrate")
-=======
-      ant.get(src: "https://github.com/transmart/transmartApp-Config/archive/GPL1.1_Beta_RC4.zip", dest: build_dir | "transmartApp-Config-GPL1.1_Beta_RC4.zip")
+      
+	  ant.get(src: "https://github.com/transmart/transmartApp-Config/archive/GPL1.1_Beta_RC4.zip", dest: build_dir | "transmartApp-Config-GPL1.1_Beta_RC4.zip")
       ant.unzip(src: build_dir | "transmartApp-Config-GPL1.1_Beta_RC4.zip", dest: build_dir)
 	  ant.move(file: build_dir | "transmartApp-Config-GPL1.1_Beta_RC4", tofile: build_dir | "transmartApp-Config")
->>>>>>> refs/heads/fixes_for_Beta_V1Point1
 
 //    Checkout contains:
 //    External configuration files for transmart application
@@ -625,190 +469,7 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 
 }
 
-<<<<<<< HEAD
 
-target(executePostI2b2Scripts: "the POST I2b2 Import Scripts")
- {
-//     This includes the ETL schema objects (first, because of dependencies)
-//
-//     a. psql -h localhost -U postgres -d transmart -f i2b2-grants.sql --quiet
-//     b  psql -h localhost -U postgres -d transmart -f etl/start.sql --quiet
-//     c. psql -h localhost -U postgres -d transmart -f post-i2b2.sql --quiet
-
-     dbScriptStep(build_dir | "transmartApp-DB/postgresql/i2b2-grants.sql",
-             transmart_db_name, true, true,
-             build_dir | "transmartApp-DB/postgresql")
-
-     dbScriptStep(build_dir | "transmartApp-DB/postgresql/etl/start.sql",
-             transmart_db_name, true, true,
-             build_dir | "transmartApp-DB/postgresql")
-
-     dbScriptStep(build_dir | "transmartApp-DB/postgresql/post-i2b2.sql",
-             transmart_db_name, true, true,
-             build_dir | "transmartApp-DB/postgresql")
- }
-
-target(executeI2b2ImportScripts: "execute I2b2 Import Scripts")
-{
-    //    a. Execute the i2b2_prerequisites.sql script
-    dbScriptStep(build_dir | "transmartApp-DB/postgresql/i2b2_prerequisites.sql",
-            transmart_db_name, true, true)
-
-//    Download i2b2 upgrades and data loading for PostgreSQL upgrade - github/transmart/i2b2_1.6_postgres
-//    Use master branch
-    def i2b2Dir = build_dir | "i2b2_1.6_postgres"
-    gitStep("https://github.com/transmart/i2b2_1.6_Postgres.git", i2b2Dir)
-
-//    a2.  Execute the i2b2 postgresql import scripts
-//    From i2b2Dir/readme :
-//    see demodata/src/src/edu.harvard.i2b2.data/Release_1-6/NewInstall/Data load instructions.docx
-//    and coreserver/src/README.txt
-
-//    demodata - scrips for building the postgres version of the demo data
-    i2b2Demodata()
-
-//    coreserver - source files for building the core i2b2 modules used by tranSMART
-	if (locations_jboss) {
-		i2b2Coreserver()
-	}
-}
-
-target(i2b2Demodata: "loading i2b2 demo data")
-{
-    def i2b2Dir = build_dir | "i2b2_1.6_postgres"  //TODO remove this
-    // redundant line of code...
-    def demodataDir = i2b2Dir | "demodata/src/src/edu.harvard.i2b2.data/Release_1-6/NewInstall/"
-    //    1. Set appropriate values for properties mentioned in db.properties file    //TODO - db.properties are not yet updated here
-    def command =  ["${tools_ant_cmd}", "setup_db_properties"]
-    commandStep(command, true, demodataDir)
-    command =  ["${tools_ant_cmd}", "-q", "load_pmdata"]
-    commandStep(command, true, demodataDir)
-    command =  ["${tools_ant_cmd}", "-q", "load_hivedata"]
-    commandStep(command, true, demodataDir)
-    command =  ["${tools_ant_cmd}", "-q", "load_demodata"]
-    commandStep(command, true, demodataDir)
-    command =  ["${tools_ant_cmd}", "-q", "load_metadata"]
-    commandStep(command, true, demodataDir)
-    command =  ["${tools_ant_cmd}", "-q", "load_workdata"]
-    commandStep(command, true, demodataDir)
-}
-
-target(i2b2Coreserver: "i2b2Coreserver - building the core i2b2 modules used by tranSMART")
-{
-    def i2b2Dir = build_dir | "i2b2_1.6_postgres"
-//    coreserver - source files for building the core i2b2 modules used by tranSMART
-    def coreserver_subdir = i2b2Dir | "coreserver/src"
-//
-//    SUMMARY of all the files that need modification
-//    (relative to BASE_DIR)
-//    ./edu.harvard.i2b2.common/build.properties
-//    jboss.home=YOUR_JBOSS_HOME_DIR
-//    ant clean dist deploy jboss_pre_deployment_setup
-    replacePropertyInFile(coreserver_subdir | "edu.harvard.i2b2.common/build.properties",
-                            "jboss.home", locations_jboss)
-    def command =  ["${tools_ant_cmd}", 'clean', 'dist', 'deploy', 'jboss_pre_deployment_setup']
-    commandStep(command, true, coreserver_subdir | "edu.harvard.i2b2.common")
-//
-//    ./edu.harvard.i2b2.pm/build.properties
-//    jboss.home=YOUR_JBOSS_HOME_DIR
-    //>>>>>> TODO - not done now:
-//            ./edu.harvard.i2b2.pm/etc/jboss/pm-ds.xml
-//     you may have to modify: connection-url, user-name, and password
-    //<<<<<<<
-//    ant -f master_build.xml clean build-all deploy
-    replacePropertyInFile(coreserver_subdir | "edu.harvard.i2b2.pm/build.properties",
-            "jboss.home", locations_jboss)
-    command =  ["${tools_ant_cmd}", '-f', 'master_build.xml', 'clean', 'build-all', 'deploy']
-    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.pm")
-//
-//    ./edu.harvard.i2b2.ontology/build.properties
-//    jboss.home=YOUR_JBOSS_HOME_DIR
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.ontology/build.properties",
-            "jboss.home", locations_jboss)
-    //>>>>>> TODO - not done now:
-//            ./edu.harvard.i2b2.ontology/etc/jboss/ont-ds.xml
-//    you may have to modify: connection-url, user-name, and password
-//    changes may be necessary for: i2b2hive, i2b2metadata, and i2b2metadata2
-    //<<<<<<<
-//        ./edu.harvard.i2b2.ontology/etc/spring/ontology_application_directory.properties
-//    set edu.harvard.i2b2.ontology.applicationdir
-//    to YOUR_JBOSS_HOME_DIR/server/default/conf/ontologyapp
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.ontology/etc/spring/ontology_application_directory.properties",
-            "edu.harvard.i2b2.ontology.applicationdir", locations_jboss + "/server/default/conf/ontologyapp")
-//    ant -f master_build.xml clean build-all deploy
-    command =  ["${tools_ant_cmd}", '-f', 'master_build.xml', 'clean', 'build-all', 'deploy']
-    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.ontology")
-//
-//    ./edu.harvard.i2b2.crc.loader/build.properties
-//    jboss.home=YOUR_JBOSS_HOME_DIR
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crc.loader/build.properties",
-            "jboss.home", locations_jboss)
-//            ./edu.harvard.i2b2.crc.loader/etc/spring/crc_loader_application_directory.properties
-//    set edu.harvard.i2b2.crc.loader.applicationdir to be
-//    YOUR_JBOSS_HOME_DIR/server/default/conf/crcapp
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crc.loader/etc/spring/crc_loader_application_directory.properties",
-            "edu.harvard.i2b2.crc.loader.applicationdir", locations_jboss + "/server/default/conf/crcapp")
-//    ant -f build.xml clean dist
-    command =  ["${tools_ant_cmd}", '-f', 'build.xml', 'clean', 'dist']
-    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.crc.loader")
-//
-//    ./edu.harvard.i2b2.crcplugin.patientcount/build.properties
-//    crcplugin.home=YOUR_JBOSS_HOME_DIR/server/default
-//    jboss.home=YOUR_JBOSS_HOME_DIR
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crcplugin.patientcount/build.properties",
-            "crcplugin.home", locations_jboss + "/server/default")
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crcplugin.patientcount/build.properties",
-            "jboss.home", locations_jboss)
-//            ./edu.harvard.i2b2.crcplugin.patientcount/etc/spring/patientcount_application_directory.properties
-//    set edu.harvard.i2b2.crcplugin.pb.applicationdir
-//    to YOUR_JBOSS_HOME_DIR/server/default/conf/crcapp
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crcplugin.patientcount/etc/spring/patientcount_application_directory.properties",
-            "edu.harvard.i2b2.crcplugin.pb.applicationdir", locations_jboss + "/server/default/conf/crcapp")
-//    no build HERE???
-//
-//    ./edu.harvard.i2b2.crc/build.properties
-//    jboss.home=YOUR_JBOSS_HOME_DIR
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crc/build.properties",
-            "jboss.home", locations_jboss)
-//            ./edu.harvard.i2b2.crc/etc/spring/crc_application_directory.properties
-//    set edu.harvard.i2b2.crc.applicationdir to be
-//    YOUR_JBOSS_HOME_DIR/server/default/conf/crcloaderapp
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.crc/etc/spring/crc_application_directory.properties",
-            "edu.harvard.i2b2.crc.applicationdir", locations_jboss + "/server/default/conf/crcloaderapp")
-//    ant -f master_build.xml clean build-all deploy
-    command =  ["${tools_ant_cmd}", '-f', 'master_build.xml', 'clean', 'build-all', 'deploy']
-    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.crc")
-//
-//    ./edu.harvard.i2b2.workplace/build.properties
-//    jboss.home=YOUR_JBOSS_HOME_DIR
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.workplace/build.properties",
-            "jboss.home", locations_jboss)
-//            ./edu.harvard.i2b2.workplace/etc/spring/workplace_application_directory.properties
-//    set edu.harvard.i2b2.workplace.applicationdir
-//    to YOUR_JBOSS_HOME_DIR/server/default/conf/workplaceapp
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.workplace/etc/spring/workplace_application_directory.properties",
-            "edu.harvard.i2b2.workplace.applicationdir", locations_jboss + "/server/default/conf/workplaceapp")
-//    ant -f master_build.xml clean build-all deploy
-    command =  ["${tools_ant_cmd}", '-f', 'master_build.xml', 'clean', 'build-all', 'deploy']
-    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.workplace")
-//
-//
-//    ./edu.harvard.i2b2.fr/build.properties
-//    jboss.home=YOUR_JBOSS_HOME_DIR
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.fr/build.properties",
-            "jboss.home", locations_jboss)
-//            ./edu.harvard.i2b2.fr/etc/spring/fr_application_directory.properties
-//    set edu.harvard.i2b2.fr.applicationdir
-//    to YOUR_JBOSS_HOME_DIR/server/default/conf/frapp
-    replacePropertyInFile(coreserver_subdir + "/edu.harvard.i2b2.fr/etc/spring/fr_application_directory.properties",
-            "edu.harvard.i2b2.fr.applicationdir", locations_jboss + "/server/default/conf/frapp")
-//    ant -f master_build.xml clean build-all deploy
-    command =  ["${tools_ant_cmd}", '-f', 'master_build.xml', 'clean', 'build-all', 'deploy']
-    commandStep(command, true, coreserver_subdir + "/edu.harvard.i2b2.fr")
-}
-
-=======
->>>>>>> refs/heads/fixes_for_Beta_V1Point1
 target(createTransmartDB: "createTransmartDB")
 {
     def command = "CREATE DATABASE $transmart_db_name " +
