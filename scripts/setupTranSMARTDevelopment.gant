@@ -248,7 +248,11 @@ def validateEnvironment() {
 
 target('default': "cleanup and setup") {
     //clean()
-    clean_install_scripts()
+    install()
+}
+
+target(install: "install") {
+	install_scripts()
 }
 
 target('setup': "test prerequisites") {
@@ -298,9 +302,9 @@ target(clean_config_files: "clean out the config files...")
     delete(dir: transmartuser_home | ".grails/transmartConfig")
 }
 
-target(clean_install_scripts: "Cleanup and Install from scripts only the GEO studies, GSE9150, GSE4382, GSE14860") {
+target(install_scripts: "Cleanup and Install from scripts only the GEO studies, GSE9150, GSE4382, GSE14860") {
 	
-	def scriptDir = build_dir | "transmart-db/postgresql_wGEO"
+	def scriptDir = build_dir | "transmartApp-DB/postgresql_wGEO"
 	ensureTablespaces()
 	
 	//Fetch db scripts
@@ -483,7 +487,7 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
     //TODO : do something with com.recomdata.plugins.analysisImageURL?
 
 
-    //TODO - edit DataSource.config to reflect your postgreSQL (you might have to change host, port, username, password)    - this is left with DEFAULT values for now
+    //TODO - edit DataSource.config to reflect your postgreSQL (you might have to change host, port, username, password) - this is left with DEFAULT values for now
 
 
     //Edit RModulesConfig.groovy, look at these values
