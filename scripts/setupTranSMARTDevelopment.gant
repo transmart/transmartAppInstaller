@@ -104,6 +104,7 @@ def validateEnvironment() {
     exec_postfix = host_os_type == "windows" ? '.exe' : ''
 
     /* {{{ psql */
+    info ">>>> Testing psql and postgres"
     tools_psql_cmd = tools_psql_cmd ?: which('psql')
     if (!tools_psql_cmd) {
         fail 'psql executable location not specified'
@@ -111,15 +112,19 @@ def validateEnvironment() {
     if (!new File(tools_psql_cmd).canExecute()) {
         fail 'psql location "%s" is invalid', tools_psql_cmd
     }
+    info "<<<< psql OK"
+    println ""
 
     if (!pg_database && !System.getenv('PGDATABASE')) {
         pg_database = pg_user ?: System.getProperty("user.name")
         warn 'postgres.workingdb was not specified, trying "%s"', pg_database
     }
 
+    info ">>>> Testing psql user"
     // Test whether we want to change user
     psql_sudo_user = null
     if (host_os_type == 'unix') {
+        info "Unix test 1: using current user"
         result = executePsql(['-t', '-c', 'select 1'], failOnError: false)
 
         if (!result) {
@@ -131,6 +136,7 @@ def validateEnvironment() {
 
             warn "Failed connecting to the database. Trying now with sudo"
             psql_sudo_user = pg_user
+            info "Unix test 2: using sudo user '" + psql_sudo_user + "'"
             result = executePsql(['-t', '-c', 'select 2'], failOnError: false)
 
             if (!result) {
@@ -139,7 +145,13 @@ def validateEnvironment() {
                 fail "Abort"
             }
         }
+    } else {
+        info "No specific user tests for " + host_os_type + " systems"
     }
+    info "<<<< psql user OK"
+    println ""
+
+    info ">>>> Testing psql DB superuser"
     result = executePsql(['-t', '-c', 'select rolsuper, current_user ' +
             'from pg_authid where rolname = current_user'], failOnError: false)
     if (!result) {
@@ -179,9 +191,14 @@ def validateEnvironment() {
             info "PostgreSQL user detected: '%s'", pg_process_user
         }
     }
+
+    info "<<<< psql DB superuser OK"
+    println ""
+
     /* }}} */
 
     /* {{{ Ant */
+    info ">>>> Testing ant"
     if (!tools_ant_cmd) {
         if (host_os_type == 'unix') {
             def thisFile = binding.'gant.file'.substring('file:'.length())
@@ -197,6 +214,8 @@ def validateEnvironment() {
     if (!result) {
         fail "Failed on invocation of ant -version"
     }
+    info "<<<< ant OK"
+    println ""
     /* }}} */
 
     /* {{{ Validation of directories */
@@ -212,10 +231,16 @@ def validateEnvironment() {
         if (!new File(directory).canWrite()) {
             fail "No write permissions in %s, check %s", directory, settingName
         }
+        info "Directory %s exists and is writable", directory
     }
+
+    info ">>>> Testing directories"
+
     dirValidation "locations.build.out",          build_dir
     dirValidation "locations.db.tablespace",      transmart_db_tablespace_location
     dirValidation "locations.transmartuser.home", transmartuser_home
+    info "<<<< Directories OK"
+    println ""
     /* }}} */
 
     info "Everything validated, let's start"
@@ -224,6 +249,9 @@ def validateEnvironment() {
 target('default': "cleanup and setup") {
     //clean()
     clean_install_scripts()
+}
+
+target('setup': "test prerequisites") {
 }
 
 target(cleanBuildDir: 'delete build dir contents')
@@ -237,7 +265,7 @@ target(cleanBuildDir: 'delete build dir contents')
 target(clean: "clean-up to run again...")
 {
 	clean_db()
-	clean_config_files()    
+	clean_config_files()
 }
 
 target(clean_db: "clean out the database...")
@@ -279,7 +307,7 @@ target(clean_install_scripts: "Cleanup and Install from scripts only the GEO stu
 	fetchDBScripts()
 	
 	//Drop/Create transmart schema
-    createTransmartDB()
+	createTransmartDB()
 	
 	//Update tablespaces
 	scriptFileName = "tablespaces.sql"
@@ -578,49 +606,56 @@ Thread tailThread(File file) {
 
     new Thread({
         def lastSize = safeSize()
+	def done = false
+	def prefix = ""
 
-        try {
-            while (true) {
+        while(!done) {
+            try {
                 Thread.sleep(500)
+            } catch (InterruptedException ie) {
+	        prefix = "     [exec] "
+	        done = true
+            }
 
-                def currentSize = safeSize()
-                if (currentSize < lastSize) {
-                    lastSize = 0
-                }
-                if (currentSize == lastSize) {
+            def currentSize = safeSize()
+            if (currentSize < lastSize) {
+                lastSize = 0
+            }
+            if (currentSize == lastSize) {
+                continue
+            }
+
+            def fis = null
+            try {
+                try {
+                    fis = new FileInputStream(file)
+                } catch (FileNotFoundException fn) {
                     continue
                 }
 
-                def fis = null
-                try {
-                    try {
-                       fis = new FileInputStream(file)
-                    } catch (FileNotFoundException fn) {
-                        continue
-                    }
+                byte[] buffer = new byte[8192]
+                int left = currentSize - lastSize
 
-                    byte[] buffer = new byte[8192]
-                    int left = currentSize - lastSize
+                fis.skip(lastSize)
+                while (left > 0) {
+                    def read = fis.read(buffer, 0, Math.min(left, 8192))
+                    if (read == -1)
+                        break
 
-                    fis.skip(lastSize)
-                    while (left > 0) {
-                        def read = fis.read(buffer, 0, Math.min(left, 8192))
-                        if (read == -1)
-                            break
-
-                        System.out.print(new String(buffer, 0, read, "ISO-8859-1"))
-                        left -= read
-                    }
-
-                    lastSize = currentSize
-                } finally {
-                    if (fis)
-                        fis.close()
+                    System.out.print(new String(buffer, 0, read, "ISO-8859-1"))
+                    left -= read
                 }
+
+                lastSize = currentSize
+            } finally {
+                if (fis)
+                    fis.close()
             }
-        }  catch (InterruptedException ie) {
-            // exit thread
+	    if (Thread.interrupted()) {
+	        break;
+            }
         }
+
     } as Runnable)
 }
 
@@ -662,6 +697,10 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false,
 
     def outputThread = null
     if (!quiet) {
+        if (output instanceof File) {
+	    def fos = new FileOutputStream(output)
+	    fos.close()
+	}
         outputThread = tailThread(output instanceof File
                                   ? output
                                   : new File(output))
@@ -674,7 +713,7 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false,
         //remove executable from list:
         command.remove(0)
 
-        info "Executing %s %s", executable, command.collect { "'$it'" }.join(" ")
+        info "Executing: %s %s", executable, command.collect { "'$it'" }.join(" ")
 
         ant.exec(dir: dir,
                 failonerror: failOnError,
@@ -696,6 +735,7 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false,
         fail "Exception was raised: %s", e.message
     } finally {
         outputThread?.interrupt()
+	sleep(500) // wait for output to be reported
     }
 
     ant.project.properties.cmdExit == "0" ? true : false
