@@ -413,7 +413,7 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 {
     //git clone https://github.com/transmart/transmartApp-Config.git  branch   postgresMigrate
     def transmartConfigDir = build_dir | "transmartApp-Config"
-      ant.get(src: "https://github.com/transmart/transmartApp-Config/archive/GPL1.1_Beta_RC4.zip", dest: build_dir | "transmartApp-Config-${version_tag}.zip")
+      ant.get(src: "https://github.com/transmart/transmartApp-Config/archive/${version_tag}.zip", dest: build_dir | "transmartApp-Config-${version_tag}.zip")
       ant.unzip(src: build_dir | "transmartApp-Config-${version_tag}.zip", dest: build_dir)
 	  ant.move(file: build_dir | "transmartApp-Config-${version_tag}", tofile: build_dir | "transmartApp-Config")
 
