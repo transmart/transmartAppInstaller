@@ -12,8 +12,8 @@ import java.util.concurrent.TimeUnit
  *
  * Author : pieter lukasse (pieter@thehyve.nl)
  *
- *
- * NOTE: This installer is for GPL1.1_Beta_RC4
+ * NOTE: This installer is for the TAG release or latest BRANCH build as 
+ * specified in setupTranSMARTDevelopment.properties under git.version.tag
  *
  ******************************************************************/
 
@@ -75,11 +75,10 @@ pg_database                      = properties['postgres.workingdb']
 pg_host                          = properties['postgres.host']
 pg_port                          = properties['postgres.port']
 
-git_clone_branch_db              = properties['git.branch.db']
-git_clone_branch_config          = properties['git.branch.config']
-
 webapps_subdir                   = 'applications'
 webapps_data                     = 'appdata'
+
+version_tag                      = properties['github.version.tag']
 
 //some handy derived globals:
 ant_last_step_output             = new File(getTempDir(), "ant_last_step_out.txt")
@@ -87,7 +86,6 @@ ant_last_step_output             = new File(getTempDir(), "ant_last_step_out.txt
 /*  Set in validate: */
 host_os_type = null
 exec_postfix = null
-git_has_single_version = null
 psql_sudo_user = null
 pg_effective_user = null
 pg_process_user = null
@@ -106,6 +104,7 @@ def validateEnvironment() {
     exec_postfix = host_os_type == "windows" ? '.exe' : ''
 
     /* {{{ psql */
+    info ">>>> Testing psql and postgres"
     tools_psql_cmd = tools_psql_cmd ?: which('psql')
     if (!tools_psql_cmd) {
         fail 'psql executable location not specified'
@@ -113,15 +112,19 @@ def validateEnvironment() {
     if (!new File(tools_psql_cmd).canExecute()) {
         fail 'psql location "%s" is invalid', tools_psql_cmd
     }
+    info "<<<< psql OK"
+    println ""
 
     if (!pg_database && !System.getenv('PGDATABASE')) {
         pg_database = pg_user ?: System.getProperty("user.name")
         warn 'postgres.workingdb was not specified, trying "%s"', pg_database
     }
 
+    info ">>>> Testing psql user"
     // Test whether we want to change user
     psql_sudo_user = null
     if (host_os_type == 'unix') {
+        info "Unix test 1: using current user"
         result = executePsql(['-t', '-c', 'select 1'], failOnError: false)
 
         if (!result) {
@@ -133,6 +136,7 @@ def validateEnvironment() {
 
             warn "Failed connecting to the database. Trying now with sudo"
             psql_sudo_user = pg_user
+            info "Unix test 2: using sudo user '" + psql_sudo_user + "'"
             result = executePsql(['-t', '-c', 'select 2'], failOnError: false)
 
             if (!result) {
@@ -141,7 +145,13 @@ def validateEnvironment() {
                 fail "Abort"
             }
         }
+    } else {
+        info "No specific user tests for " + host_os_type + " systems"
     }
+    info "<<<< psql user OK"
+    println ""
+
+    info ">>>> Testing psql DB superuser"
     result = executePsql(['-t', '-c', 'select rolsuper, current_user ' +
             'from pg_authid where rolname = current_user'], failOnError: false)
     if (!result) {
@@ -181,9 +191,14 @@ def validateEnvironment() {
             info "PostgreSQL user detected: '%s'", pg_process_user
         }
     }
+
+    info "<<<< psql DB superuser OK"
+    println ""
+
     /* }}} */
 
     /* {{{ Ant */
+    info ">>>> Testing ant"
     if (!tools_ant_cmd) {
         if (host_os_type == 'unix') {
             def thisFile = binding.'gant.file'.substring('file:'.length())
@@ -199,6 +214,8 @@ def validateEnvironment() {
     if (!result) {
         fail "Failed on invocation of ant -version"
     }
+    info "<<<< ant OK"
+    println ""
     /* }}} */
 
     /* {{{ Validation of directories */
@@ -214,10 +231,16 @@ def validateEnvironment() {
         if (!new File(directory).canWrite()) {
             fail "No write permissions in %s, check %s", directory, settingName
         }
+        info "Directory %s exists and is writable", directory
     }
+
+    info ">>>> Testing directories"
+
     dirValidation "locations.build.out",          build_dir
     dirValidation "locations.db.tablespace",      transmart_db_tablespace_location
     dirValidation "locations.transmartuser.home", transmartuser_home
+    info "<<<< Directories OK"
+    println ""
     /* }}} */
 
     info "Everything validated, let's start"
@@ -225,7 +248,14 @@ def validateEnvironment() {
 
 target('default': "cleanup and setup") {
     //clean()
-    clean_install_scripts()
+    install()
+}
+
+target(install: "install") {
+	install_scripts()
+}
+
+target('setup': "test prerequisites") {
 }
 
 target(cleanBuildDir: 'delete build dir contents')
@@ -245,14 +275,20 @@ target(clean: "clean-up to run again...")
 target(clean_db: "clean out the database...")
 {
     //drop postgres "transmart" db:
-    echo ("If Drop database fails, check for existing connections to the database")
+    echo ("Kill existing connections to transmart DB, then drop it")
+	killTransmartDBConnections();    
     def command =  "drop database if exists $transmart_db_name"
     dbCommand(command, failOnError: true)
-
+    
+    //drop postgres tablespaces
+    tablespaces = [ 'biomart', 'deapp', 'indx', 'search_app', 'transmart' ];
+    tablespaces.each {
+    	dbCommand("DROP TABLESPACE IF EXISTS $it", failOnerror: false, quiet: true)
+    }
     //drop roles
     roles = ['biomart', 'biomart_user', 'deapp', 'i2b2demodata', 'i2b2hive',
             'i2b2metadata', 'i2b2pm', 'i2b2workdata', 'searchapp', 'tm_cz',
-            'tm_lz', 'tm_wz'];
+            'tm_lz', 'tm_wz', 'pentaho'];
     command = "reassign owned by ${roles.join(', ')} to $pg_effective_user;"
     dbCommand(command, failOnError: false)
     roles.each {
@@ -266,22 +302,23 @@ target(clean_config_files: "clean out the config files...")
     delete(dir: transmartuser_home | ".grails/transmartConfig")
 }
 
-target(clean_install_scripts: "Cleanup and Install from scripts only the GEO studies, GSE9150, GSE4382, GSE14860") {
+target(install_scripts: "Cleanup and Install from scripts only the GEO studies, GSE9150, GSE4382, GSE14860") {
 	
-	def scriptDir = build_dir | "transmart-db/postgresql_wGEO"
+	def scriptDir = build_dir | "transmartApp-DB/postgresql_wGEO"
 	ensureTablespaces()
 	
 	//Fetch db scripts
 	fetchDBScripts()
 	
 	//Drop/Create transmart schema
-	scriptFileName = "create-transmart-db.sql"
-	dbScriptStep(scriptFileName, transmart_db_name, true, true, scriptDir);
+	createTransmartDB()
 	
-	//Create tablespaces
+	//Update tablespaces
 	scriptFileName = "tablespaces.sql"
 	updateStudyInstallTablespaceLocations(scriptDir | scriptFileName, "__TABLESPACES_DIR__")
-	dbScriptStep(scriptFileName, transmart_db_name, true, true, scriptDir);
+
+//  tablespaces already runs within create-main so commented out the next line
+//	dbScriptStep(scriptFileName, transmart_db_name, true, true, scriptDir);
 	
 	//Create schemas
 	scriptFileName = "create-main.sql"
@@ -313,11 +350,12 @@ target(install_dump: "Install from dump only the GEO studies, GSE9150, GSE4382, 
     
 }
 
-target(fetchDBScripts: "fetch the fixes_for_Beta_V1Point1 branch (update to appropriate release tag) of transmartApp-DB")
+target(fetchDBScripts: "fetch the ${version_tag} tag of transmartApp-DB")
 {
-	ant.get(src: "https://github.com/transmart/transmartApp-DB/archive/GPL1.1_Beta_RC4.zip", dest: build_dir | "transmartApp-DB-GPL1.1_Beta_RC4.zip")
-	ant.unzip(src: build_dir | "transmartApp-DB-GPL1.1_Beta_RC4.zip", dest: build_dir)
-	ant.move(file: build_dir | "transmartApp-DB-GPL1.1_Beta_RC4", tofile: build_dir | "transmart-db")
+	info("Fetching the ${version_tag} tag of transmartApp-DB. This could take a while...")
+	ant.get(src: "https://github.com/transmart/transmartApp-DB/archive/${version_tag}.zip", dest: build_dir | "transmartApp-DB-${version_tag}.zip")
+	ant.unzip(src: build_dir | "transmartApp-DB-${version_tag}.zip", dest: build_dir)
+	ant.move(file: build_dir | "transmartApp-DB-${version_tag}", tofile: build_dir | "transmartApp-DB")
 }
 
 target(createTablespaces: "Create the tablespace entries for the GEO studies")
@@ -375,10 +413,9 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 {
     //git clone https://github.com/transmart/transmartApp-Config.git  branch   postgresMigrate
     def transmartConfigDir = build_dir | "transmartApp-Config"
-      
-	  ant.get(src: "https://github.com/transmart/transmartApp-Config/archive/GPL1.1_Beta_RC4.zip", dest: build_dir | "transmartApp-Config-GPL1.1_Beta_RC4.zip")
-      ant.unzip(src: build_dir | "transmartApp-Config-GPL1.1_Beta_RC4.zip", dest: build_dir)
-	  ant.move(file: build_dir | "transmartApp-Config-GPL1.1_Beta_RC4", tofile: build_dir | "transmartApp-Config")
+      ant.get(src: "https://github.com/transmart/transmartApp-Config/archive/GPL1.1_Beta_RC4.zip", dest: build_dir | "transmartApp-Config-${version_tag}.zip")
+      ant.unzip(src: build_dir | "transmartApp-Config-${version_tag}.zip", dest: build_dir)
+	  ant.move(file: build_dir | "transmartApp-Config-${version_tag}", tofile: build_dir | "transmartApp-Config")
 
 //    Checkout contains:
 //    External configuration files for transmart application
@@ -450,7 +487,7 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
     //TODO : do something with com.recomdata.plugins.analysisImageURL?
 
 
-    //TODO - edit DataSource.config to reflect your postgreSQL (you might have to change host, port, username, password)    - this is left with DEFAULT values for now
+    //TODO - edit DataSource.config to reflect your postgreSQL (you might have to change host, port, username, password) - this is left with DEFAULT values for now
 
 
     //Edit RModulesConfig.groovy, look at these values
@@ -469,9 +506,18 @@ target(configTransmartApp: "setting up the configuration files in <user home>/.g
 
 }
 
+def killTransmartDBConnections() {
+	def killconnectionscmd = "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'transmart'"    
+    dbCommand([:], killconnectionscmd)
+}
 
 target(createTransmartDB: "createTransmartDB")
 {
+	killTransmartDBConnections();
+    
+    def droptransmartcmd = "DROP DATABASE IF EXISTS transmart"	    
+    dbCommand([:], droptransmartcmd)
+    
     def command = "CREATE DATABASE $transmart_db_name " +
             "WITH OWNER = $pg_effective_user TEMPLATE template0 " +
             "ENCODING='UTF-8' LC_COLLATE='en_US.UTF-8'"
@@ -564,49 +610,56 @@ Thread tailThread(File file) {
 
     new Thread({
         def lastSize = safeSize()
+	def done = false
+	def prefix = ""
 
-        try {
-            while (true) {
+        while(!done) {
+            try {
                 Thread.sleep(500)
+            } catch (InterruptedException ie) {
+	        prefix = "     [exec] "
+	        done = true
+            }
 
-                def currentSize = safeSize()
-                if (currentSize < lastSize) {
-                    lastSize = 0
-                }
-                if (currentSize == lastSize) {
+            def currentSize = safeSize()
+            if (currentSize < lastSize) {
+                lastSize = 0
+            }
+            if (currentSize == lastSize) {
+                continue
+            }
+
+            def fis = null
+            try {
+                try {
+                    fis = new FileInputStream(file)
+                } catch (FileNotFoundException fn) {
                     continue
                 }
 
-                def fis = null
-                try {
-                    try {
-                       fis = new FileInputStream(file)
-                    } catch (FileNotFoundException fn) {
-                        continue
-                    }
+                byte[] buffer = new byte[8192]
+                int left = currentSize - lastSize
 
-                    byte[] buffer = new byte[8192]
-                    int left = currentSize - lastSize
+                fis.skip(lastSize)
+                while (left > 0) {
+                    def read = fis.read(buffer, 0, Math.min(left, 8192))
+                    if (read == -1)
+                        break
 
-                    fis.skip(lastSize)
-                    while (left > 0) {
-                        def read = fis.read(buffer, 0, Math.min(left, 8192))
-                        if (read == -1)
-                            break
-
-                        System.out.print(new String(buffer, 0, read, "ISO-8859-1"))
-                        left -= read
-                    }
-
-                    lastSize = currentSize
-                } finally {
-                    if (fis)
-                        fis.close()
+                    System.out.print(new String(buffer, 0, read, "ISO-8859-1"))
+                    left -= read
                 }
+
+                lastSize = currentSize
+            } finally {
+                if (fis)
+                    fis.close()
             }
-        }  catch (InterruptedException ie) {
-            // exit thread
+	    if (Thread.interrupted()) {
+	        break;
+            }
         }
+
     } as Runnable)
 }
 
@@ -648,6 +701,10 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false,
 
     def outputThread = null
     if (!quiet) {
+        if (output instanceof File) {
+	    def fos = new FileOutputStream(output)
+	    fos.close()
+	}
         outputThread = tailThread(output instanceof File
                                   ? output
                                   : new File(output))
@@ -660,7 +717,7 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false,
         //remove executable from list:
         command.remove(0)
 
-        info "Executing %s %s", executable, command.collect { "'$it'" }.join(" ")
+        info "Executing: %s %s", executable, command.collect { "'$it'" }.join(" ")
 
         ant.exec(dir: dir,
                 failonerror: failOnError,
@@ -682,6 +739,7 @@ def commandStep(command, failOnError, dir=".", inputString=null, quiet=false,
         fail "Exception was raised: %s", e.message
     } finally {
         outputThread?.interrupt()
+	sleep(500) // wait for output to be reported
     }
 
     ant.project.properties.cmdExit == "0" ? true : false
