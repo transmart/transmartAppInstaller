@@ -75,7 +75,7 @@ pg_database                      = properties['postgres.workingdb']
 pg_host                          = properties['postgres.host']
 pg_port                          = properties['postgres.port']
 
-webapps_subdir                   = 'applications'
+webapps_subdir                   = 'webapps'
 webapps_data                     = 'appdata'
 
 version_tag                      = properties['github.version.tag']
