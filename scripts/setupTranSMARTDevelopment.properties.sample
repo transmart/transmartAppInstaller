@@ -41,4 +41,4 @@ postgres.user=postgres
 #postgres.port=5432
 
 ### Target version TAG
-github.version.tag=GPL1.1_Beta_RC6
+github.version.tag=GPL1.1_Beta_RC7
